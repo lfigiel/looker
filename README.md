@@ -1,5 +1,5 @@
-#Looker
-##Overview
+# Looker
+## Overview
 Looker is an Open Source, multi-platform solution for making existing or new embedded projects wireless. Currently Looker supports only WiFi but Bluetooth is planned to be added in the future.
 
 The main goal of this project is to make it easy to use with maximum portability. Thanks to simple API Looker is installed by just adding a few lines of code. For a network communication it useses ESP8266 - popular and readily available WiFi module which is connected to the main board with only four wires.
@@ -15,22 +15,22 @@ Looker library and HTTP server are synchronized over a serial port.
 
 Any device with a web-browser installed: PC, smart phone, tablet can be used to control Looker-powered device. No additional application is necessary.
 
-##How does it work
+## How does it work
 HTTP server dynamically creates a simple website that lists out some variables from the user's code. Only variables explicitly registered to Looker database will be showed on the website. Within the code those variables can be linked to an external sensors, relays, LEDs etc. From the website you can read/write the variables and see instant effect from/on the embedded device e.g. turn a LED, switch a relay, read temperature from a temp. sensor and so on.
 
-##Where can it be used
+## Where can it be used
 1. Looker adds a smart and convenient user interface (UI) feature to an embedded project where often this thing is very limited. Instead of connecting a display with bunch of cables, some extra LEDs for output or buttons for input user can have this all conveniently on a remote device e.g. a tablet already equipped with high-res display. If UI requires more I/O they can be simply added in a software rather than in hardware.
 
 2. Not only does Looker let a user control the device from local network but also from the outside World as long as the device’s IP is accessible.
 
 3. Remote debugging. Being able to view and modify variables on fly can make debugging easier specially when a specialized debugger is not available. 
 
-##Licensing
+## Licensing
 Looker is released under **MIT** open source license.
 
-##Hello World
+## Hello World
 */src/examples/arduino/helloWorld*
-###This ia a simple Arduino app to read ADC and drive LED from a website:
+### This ia a simple Arduino app to read ADC and drive LED from a website:
 
 ```C
 #define DOMAIN "arduino"
@@ -58,12 +58,12 @@ void loop() {
     delay(100);
 }
 ```
-###The device is now accessible at address: http://arduino.local
+### The device is now accessible at address: http://arduino.local
 **.local** is added to the domain by multicast Domain Name System (mDNS) that Looker is using.
 <todo: add screenshot from remote device>
 <![alt text](https://raw.githubusercontent.com/username/projectname/branch/path/to/img.png)>
 
-##API walkthrough
+## API walkthrough
 ---
 ```
 LOOKER_EXIT_CODE looker_init(const char *ssid, const char *pass, const char *domain)
@@ -186,7 +186,7 @@ If same variable changes at the same time on both sides the website takes preced
 The more frequent it is called the more often the variables get updated.
 
 
-##Fine-tuning
+## Fine-tuning
 *looker.h* has some defines that help optimize Looker:
 ```
 #define LOOKER_USE_MALLOC
