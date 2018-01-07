@@ -59,9 +59,9 @@ void loop() {
 }
 ```
 ### The device is now accessible at address: http://arduino.local
+<![alt text](https://raw.githubusercontent.com/lfigiel/looker/master/src/examples/arduino/helloWorld/helloWorld.png)>
+
 **.local** is added to the domain by multicast Domain Name System (mDNS) that Looker is using.
-<todo: add screenshot from remote device>
-<![alt text](https://raw.githubusercontent.com/username/projectname/branch/path/to/img.png)>
 
 ## API walkthrough
 ---
