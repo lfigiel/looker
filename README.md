@@ -95,9 +95,8 @@ sets domain name at which the device advertises. Using domain helps finding the 
 ```
 looker_init(SSID, PASS, NULL)
 ```
+
 device is still present at IP address that was assigned by the access point.
-For example:
-http://192.168.0.1  
 Tool like “Fing” might be helpful in finding this IP address.
 ---
 ```
