@@ -30,7 +30,7 @@ Looker is released under **MIT** open source license.
 
 ## Hello World
 */src/examples/arduino/helloWorld*
-### This ia a simple Arduino app to read ADC and drive LED from a website:
+### This is a simple Arduino app to read ADC and drive LED from a website:
 
 ```C
 #define DOMAIN "arduino"
