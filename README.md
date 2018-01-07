@@ -98,6 +98,7 @@ looker_init(SSID, PASS, NULL)
 
 device is still present at IP address that was assigned by the access point.
 Tool like “Fing” might be helpful in finding this IP address.
+
 ---
 ```
 LOOKER_EXIT_CODE looker_reg(const char *name, volatile void *addr, int size, LOOKER_VAR_TYPE type, LOOKER_HTML_TYPE html, STYLE_TYPE style);
