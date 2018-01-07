@@ -1,0 +1,10 @@
+/*
+Copyright (c) 2018 Lukasz Figiel
+*/
+
+#define LOOKER_WIFI_VAR_COUNT 64
+#define LOOKER_WIFI_VAR_VALUE_SIZE 64
+#define LOOKER_WIFI_VAR_NAME_SIZE 64
+#define LOOKER_WIFI_VAR_STYLE_SIZE 64
+#define LOOKER_WIFI_FLOAT_PREC 4
+
