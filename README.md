@@ -132,6 +132,18 @@ float and double
 *LOOKER_VAR_STRING*  
 string
 
+The following parameters specify the number of digits after the decimal place to print:  
+*LOOKER_VAR_FLOAT_0*  
+*LOOKER_VAR_FLOAT_1*  
+*LOOKER_VAR_FLOAT_2*  
+*LOOKER_VAR_FLOAT_3*  
+*LOOKER_VAR_FLOAT_4*  
+default number is defined in *looker.h*:
+```
+#define LOOKER_VAR_FLOAT LOOKER_VAR_FLOAT_1
+```
+
+The above apply to both float and double.  
 All variables except string can have size of up to 8 bytes (64-bit).
 Maximum size – including string is limited in *looker.h*:
 ```
