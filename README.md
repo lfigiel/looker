@@ -83,12 +83,12 @@ Example of *wifi.h*:
 
 ```
 //network 1
-#define SSID <ssid1>
-#define PASS <pass1>
+#define SSID "ssid1"
+#define PASS "pass1"
 
 //network 2
-//#define SSID <ssid2>
-//#define PASS <pass2>
+//#define SSID "ssid2"
+//#define PASS "pass2"
 ```
 **domain**
 sets domain name at which the device advertises. Using domain helps finding the device but is not necessary. If **domain** is skipped:
