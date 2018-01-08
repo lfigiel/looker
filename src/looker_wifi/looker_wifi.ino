@@ -346,19 +346,20 @@ void print_html(void)
         }
         else if (looker_var[i].type == LOOKER_VAR_STRING)
             strcpy(value_text, looker_var[i].value);
-        else if (looker_var[i].type == LOOKER_VAR_FLOAT)
+        else if ((looker_var[i].type >= LOOKER_VAR_FLOAT_0) && (looker_var[i].type <= LOOKER_VAR_FLOAT_4))
         {
+            unsigned char prec = looker_var[i].type - LOOKER_VAR_FLOAT_0;
             if (looker_var[i].size == sizeof(float))
             {
                 float f;
                 memcpy(&f, looker_var[i].value, sizeof(f));
-                dtostrf(f, 1, LOOKER_WIFI_FLOAT_PREC, value_text);
+                dtostrf(f, 1, prec, value_text);
             }
             else if (looker_var[i].size == sizeof(double))
             {
                 double d;
                 memcpy(&d, looker_var[i].value, sizeof(d));
-                dtostrf(d, 1, LOOKER_WIFI_FLOAT_PREC, value_text);
+                dtostrf(d, 1, prec, value_text);
             }
         }
 
@@ -641,7 +642,11 @@ void var_process(const char *var_name, const char *var_value)
             }
         break;
         }
-        case LOOKER_VAR_FLOAT:
+        case LOOKER_VAR_FLOAT_0:
+        case LOOKER_VAR_FLOAT_1:
+        case LOOKER_VAR_FLOAT_2:
+        case LOOKER_VAR_FLOAT_3:
+        case LOOKER_VAR_FLOAT_4:
         {
             double value_new, value_old;
             float f;
