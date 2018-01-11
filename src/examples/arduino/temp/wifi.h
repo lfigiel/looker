@@ -1,2 +1,2 @@
-#define SSID <'network ssid'>
-#define PASS <'network password'>
+#define LOOKER_SSID "ssid"
+#define LOOKER_PASS "pass"
