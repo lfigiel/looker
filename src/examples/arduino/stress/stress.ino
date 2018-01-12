@@ -19,7 +19,7 @@ void setup() {
     // Turn LED on while connecting
     digitalWrite(LED_BUILTIN, 1);
 
-    looker_init(SSID, PASS, DOMAIN);
+    looker_init(LOOKER_SSID, LOOKER_PASS, DOMAIN);
 
     // Turn LED off afterwards
     digitalWrite(LED_BUILTIN, 0);
