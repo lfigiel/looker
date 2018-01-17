@@ -45,7 +45,7 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     delay(500);     //skip messages from WiFi module during boot up 
     Serial1.begin(115200);
-    looker_init(SSID, PASS, DOMAIN);
+    looker_init(LOOKER_SSID, LOOKER_PASS, DOMAIN);
 
     looker_reg("ADC", &adc, sizeof(adc), LOOKER_VAR_UINT, LOOKER_HTML_VIEW, NULL);
     looker_reg("LED", &led, sizeof(led), LOOKER_VAR_UINT, LOOKER_HTML_CHECKBOX, NULL);
@@ -83,17 +83,17 @@ Example of *wifi.h*:
 
 ```
 //network 1
-#define SSID "ssid1"
-#define PASS "pass1"
+#define LOOKER_SSID "ssid1"
+#define LOOKER_PASS "pass1"
 
 //network 2
-//#define SSID "ssid2"
-//#define PASS "pass2"
+//#define LOOKER_SSID "ssid2"
+//#define LOOKER_PASS "pass2"
 ```
 **domain**
 sets domain name at which the device advertises. Using domain helps finding the device but is not necessary. If **domain** is skipped:
 ```
-looker_init(SSID, PASS, NULL)
+looker_init(LOOKER_SSID, LOOKER_PASS, NULL)
 ```
 
 device is still present at IP address that was assigned by the access point.
