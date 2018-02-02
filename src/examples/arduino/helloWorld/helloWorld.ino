@@ -12,7 +12,7 @@ volatile unsigned char led = 0;
 void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, 1);
-    delay(1000);
+    delay(500);
     serial_init();
 
     looker_init(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
