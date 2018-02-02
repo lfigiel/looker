@@ -33,30 +33,34 @@ Looker is released under **MIT** open source license.
 ### This is a simple Arduino app to read ADC and drive LED from a website:
 
 ```C
-#define DOMAIN "arduino"
 #include "looker.h"
 #include "wifi.h"
-#include "stubs/looker_stubs.c"
+#include "looker_stubs.h"
+#include "looker_stubs/looker_stubs.c"
 
-unsigned int adc;
-unsigned char led = 0;
+#define LOOKER_DOMAIN "arduino"
+
+//globals
+volatile unsigned int adc;
+volatile unsigned char led = 0;
 
 void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
-    delay(500);     //skip messages from WiFi module during boot up 
-    Serial1.begin(115200);
-    looker_init(LOOKER_SSID, LOOKER_PASS, DOMAIN);
+    digitalWrite(LED_BUILTIN, 1);
+    delay(500);
+    serial_init();
 
-    looker_reg("ADC", &adc, sizeof(adc), LOOKER_VAR_UINT, LOOKER_HTML_VIEW, NULL);
-    looker_reg("LED", &led, sizeof(led), LOOKER_VAR_UINT, LOOKER_HTML_CHECKBOX, NULL);
+    looker_init(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
+    looker_reg("ADC", &adc, sizeof(adc), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, NULL);
+    looker_reg("LED", &led, sizeof(led), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, NULL);
 }
 
 void loop() {
     adc = analogRead(A0);
     digitalWrite(LED_BUILTIN, led);
     looker_update();
-    delay(100);
 }
+
 ```
 ### The device is now accessible at address: http://arduino.local
 ![alt text](https://raw.githubusercontent.com/lfigiel/looker/master/src/examples/arduino/helloWorld/helloWorld.png)
@@ -65,13 +69,13 @@ void loop() {
 
 ## API walkthrough
 ---
-```
-LOOKER_EXIT_CODE looker_init(const char *ssid, const char *pass, const char *domain)
+```C
+looker_exit_t looker_init(const char *ssid, const char *pass, const char *domain)
 ```
 Connects to the WiFi network. Usually it takes a couple of seconds to complete.
 Blue LED on the WiFi module stops blinking when it gets connected.  
 details:  
-**LOOKER_EXIT_CODE**  
+**looker_exit_t**  
 type of exit code. On success the function returns: LOOKER_EXIT_SUCCESS. Full definition is available in *looker.h*
 
 **ssid  
@@ -81,7 +85,7 @@ It is better to define it outside of the main source code e.g. in *wifi.h*.
 In this case you don’t reveal it when sharing the code. Also helps organize when multiple networks are available.  
 Example of *wifi.h*:
 
-```
+```C
 //network 1
 #define LOOKER_SSID "ssid1"
 #define LOOKER_PASS "pass1"
@@ -90,9 +94,9 @@ Example of *wifi.h*:
 //#define LOOKER_SSID "ssid2"
 //#define LOOKER_PASS "pass2"
 ```
-**domain**
+**domain**  
 sets domain name at which the device advertises. Using domain helps finding the device but is not necessary. If **domain** is skipped:
-```
+```C
 looker_init(LOOKER_SSID, LOOKER_PASS, NULL)
 ```
 
@@ -100,15 +104,15 @@ device is still present at IP address that was assigned by the access point.
 Tool like “Fing” might be helpful in finding this IP address.
 
 ---
-```
-LOOKER_EXIT_CODE looker_reg(const char *name, volatile void *addr, int size, LOOKER_VAR_TYPE type, LOOKER_HTML_TYPE html, STYLE_TYPE style);
+```C
+looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, STYLE_TYPE style)
 ```
 Registers the variable making it accessible from the website.
 
 **name**  
 variable will be showed under this name on the website. The name does not need to be the same as the C variable.
 Max size of this name (string) is limited in *looker.h*:
-```
+```C
 #define LOOKER_VAR_NAME_SIZE 16
 ```
 **addr**  
@@ -120,55 +124,55 @@ size of the variable
 **type**  
 type of the variable. Looker needs to know what kind of variable it is. Following types are supported:  
   
-*LOOKER_VAR_INT*  
+*LOOKER_TYPE_INT*  
 all signed integers: char, short, int, long int  
 
-*LOOKER_VAR_UINT*  
+*LOOKER_TYPE_UINT*  
 all unsigned integers  
 
-*LOOKER_VAR_FLOAT*  
+*LOOKER_TYPE_FLOAT*  
 float and double  
 
-*LOOKER_VAR_STRING*  
+*LOOKER_TYPE_STRING*  
 string
 
 The following parameters specify the number of digits after the decimal place to print:  
-*LOOKER_VAR_FLOAT_0*  
-*LOOKER_VAR_FLOAT_1*  
-*LOOKER_VAR_FLOAT_2*  
-*LOOKER_VAR_FLOAT_3*  
-*LOOKER_VAR_FLOAT_4*  
+*LOOKER_TYPE_FLOAT_0*  
+*LOOKER_TYPE_FLOAT_1*  
+*LOOKER_TYPE_FLOAT_2*  
+*LOOKER_TYPE_FLOAT_3*  
+*LOOKER_TYPE_FLOAT_4*  
 default number is defined in *looker.h*:
-```
-#define LOOKER_VAR_FLOAT LOOKER_VAR_FLOAT_1
+```C
+#define LOOKER_TYPE_FLOAT LOOKER_TYPE_FLOAT_1
 ```
 
 The above apply to both float and double.  
 All variables except string can have size of up to 8 bytes (64-bit).
 Maximum size – including string is limited in *looker.h*:
-```
+```C
 #define LOOKER_VAR_VALUE_SIZE 16
 ```
-**html**  
+**label**  
 specifies how the variable is presented on the website. Following variants are supported:  
 
-*LOOKER_HTML_CHECKBOX*  
+*LOOKER_LABEL_CHECKBOX*  
 checkbox, suitable for bool (TRUE/FALLS) variables  
 
-*LOOKER_HTML_CHECKBOX_INV*  
+*LOOKER_LABEL_CHECKBOX_INV*  
 same as above but with inverted state.This is useful if the checkbox controls a LED. Depending on LED polarity having normal and inverted state allows to always have: checked – LED on, unchecked – LED off  
 
-*LOOKER_HTML_VIEW*  
+*LOOKER_LABEL_VIEW*  
 variable is read only  
 
-LOOKER_HTML_EDIT*  
+LOOKER_LABEL_EDIT*  
 variable can be edited
 
 **style**  
 CSS enhances viewing experience.
 
 Example:
-```
+```C
 #define STYLE "color:red;"	//red text
 ```
 Style can be static or dynamic.
@@ -176,19 +180,19 @@ Unlike static dynamic style can change on fly but requires more RAM.
 Dynamic style is useful for example if its value reaches some critical level and user should be alerted.
 
 To leave static style this line in *looker.h* needs to be commented out:
-```
+```C
 #define LOOKER_STYLE_DYNAMIC
 ```
 Max size of style (string) is limited in *looker.h*:
-```
+```C
 #define LOOKER_VAR_STYLE_SIZE 48
 ```
 
 For more info refer to:  
 *src/examples/arduino/style*
 ---
-```
-LOOKER_EXIT_CODE looker_update(void)  
+```C
+void looker_update(void)
 ```
 Synchronizes all registered variables with the web server.
 If a variable changes locally looker_update changes it also on the website and the other way around.
@@ -200,7 +204,7 @@ The more frequent it is called the more often the variables get updated.
 
 ## Fine-tuning
 *looker.h* has some defines that help optimize Looker:
-```
+```C
 #define LOOKER_USE_MALLOC
 ```
 Each variable needs a block of data that defines this variable.
@@ -208,7 +212,7 @@ This data can be allocated statically or dynamically.
 If LOOKER_USE_MALLOC is commented out static data is preferred.
 
 LOOKER_VAR_COUNT (*looker.h*) limits number of block of data to be allocated but with static they are all used. Therefore this value should be equal to the number of variables intended to use otherwise extra RAM will be wasted. With dynamic data block is allocated per variable (still up to LOOKER_VAR_COUNT) so RAM is better utilized. The trade off is that malloc function itself takes some space specially if it is not used elsewhere and it gets linked specially for Looker. Also data for static variables are guaranteed at the compilation time whereas dynamic data only during run time. Depending on resources, other prior malloc usage it might be possible that there will not be enough memory for Looker to allocate. 
-```
+```C
 #define LOOKER_SANITY_TEST
 ```
 This turns on a simple test that checks if a function parameter or a variable exceeds its range. This feature can be disabled to get smaller code footprint. 
