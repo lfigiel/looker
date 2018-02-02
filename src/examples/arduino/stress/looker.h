@@ -7,7 +7,7 @@ extern "C" {
 #endif //__cplusplus
 
 #define LOOKER_USE_MALLOC
-#define LOOKER_VAR_COUNT 8
+#define LOOKER_VAR_COUNT_MAX 10
 #define LOOKER_VAR_VALUE_SIZE 16
 #define LOOKER_VAR_NAME_SIZE 16
 #define LOOKER_VAR_STYLE_SIZE 48
@@ -15,64 +15,49 @@ extern "C" {
 #define LOOKER_STYLE_DYNAMIC
 
 typedef enum {
-    LOOKER_STATE_START,
-    LOOKER_STATE_REG_SIZE,
-    LOOKER_STATE_REG_TYPE,
-    LOOKER_STATE_REG_VALUE,
-    LOOKER_STATE_REG_NAME,
-    LOOKER_STATE_REG_HTML,
-    LOOKER_STATE_REG_STYLE,
-    LOOKER_STATE_UPDATE_VALUE,
-    LOOKER_STATE_UPDATE_STYLE,
-    LOOKER_STATE_CONNECT,
+    LOOKER_TYPE_INT,
+    LOOKER_TYPE_UINT,
+    LOOKER_TYPE_FLOAT_0,
+    LOOKER_TYPE_FLOAT_1,
+    LOOKER_TYPE_FLOAT_2,
+    LOOKER_TYPE_FLOAT_3,
+    LOOKER_TYPE_FLOAT_4,
+    LOOKER_TYPE_STRING,
 
-    LOOKER_STATE_LAST
-} LOOKER_STATE;
+    LOOKER_TYPE_LAST
+} looker_type_t;
 
 typedef enum {
-    LOOKER_COMM_RESET = 128,
-    LOOKER_COMM_CONNECT,
-    LOOKER_COMM_REG,
-    LOOKER_COMM_UPDATE_VALUE,
-    LOOKER_COMM_UPDATE_STYLE,
-    LOOKER_COMM_HANDSHAKE,
+    LOOKER_LABEL_SSID,
+    LOOKER_LABEL_PASS,
+    LOOKER_LABEL_DOMAIN,
+    LOOKER_LABEL_CHECKBOX,
+    LOOKER_LABEL_CHECKBOX_INV,
+    LOOKER_LABEL_VIEW,
+    LOOKER_LABEL_EDIT,
 
-    LOOKER_COMM_LAST
-} LOOKER_COMM;
-
-typedef enum {
-    LOOKER_VAR_INT,
-    LOOKER_VAR_UINT,
-    LOOKER_VAR_FLOAT_0,
-    LOOKER_VAR_FLOAT_1,
-    LOOKER_VAR_FLOAT_2,
-    LOOKER_VAR_FLOAT_3,
-    LOOKER_VAR_FLOAT_4,
-    LOOKER_VAR_STRING,
-
-    LOOKER_VAR_LAST
-} LOOKER_VAR_TYPE;
-
-typedef enum {
-    LOOKER_HTML_CHECKBOX,
-    LOOKER_HTML_CHECKBOX_INV,
-    LOOKER_HTML_VIEW,
-    LOOKER_HTML_EDIT,
-
-    LOOKER_HTML_LAST
-} LOOKER_HTML_TYPE;
+    LOOKER_LABEL_LAST
+} looker_label_t;
 
 typedef enum {
     LOOKER_EXIT_SUCCESS,
     LOOKER_EXIT_NO_MEMORY,
     LOOKER_EXIT_BAD_PARAMETER,
-    LOOKER_EXIT_BAD_COMM,
+    LOOKER_EXIT_BAD_COMMAND,
     LOOKER_EXIT_BAD_STATE,
-    LOOKER_EXIT_TARGET_TIMEOUT,
-    LOOKER_EXIT_SERVER_TIMEOUT,
+    LOOKER_EXIT_TIMEOUT,
 
     LOOKER_EXIT_LAST
-} LOOKER_EXIT_CODE;
+} looker_exit_t;
+
+typedef enum {
+    LOOKER_SLAVE_STATE_RESETING,
+    LOOKER_SLAVE_STATE_DISCONNECTED,
+    LOOKER_SLAVE_STATE_CONNECTING,
+    LOOKER_SLAVE_STATE_CONNECTED,
+
+    LOOKER_SLAVE_STATE_LAST
+} looker_slave_state_t;
 
 #define LOOKER_VAR_FLOAT LOOKER_VAR_FLOAT_1
 
@@ -83,13 +68,11 @@ typedef enum {
 #endif //LOOKER_STYLE_DYNAMIC
 
 //prototypes
-LOOKER_EXIT_CODE looker_init(const char *ssid, const char *pass, const char *domain);
-LOOKER_EXIT_CODE looker_reg(const char *name, volatile void *addr, int size, LOOKER_VAR_TYPE type, LOOKER_HTML_TYPE html, STYLE_TYPE style);
-LOOKER_EXIT_CODE looker_update(void);
+looker_exit_t looker_init(const char *ssid, const char *pass, const char *domain);
+looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, STYLE_TYPE style);
+void looker_update(void);
 void looker_destroy(void);
-extern int looker_get(void *buf, int size);
-extern void looker_send(void *buf, int size);
-
+looker_slave_state_t looker_slave_state(void);
 #ifdef __cplusplus
 }
 #endif //__cplusplus

@@ -30,224 +30,94 @@ lfigiel@gmail.com
 #include <Ticker.h>
 #include "looker_wifi.h"
 #include "looker.h"
+#include "checksum.h"
 
-#define WIFI_TIMEOUT 20     //in s
-#define COMM_TIMEOUT 100    //in ms
-#define HS_TIMEOUT 2000     //in ms
-#define TIMEOUT_DISABLED -1
 #define LED_ON digitalWrite(ledPin, LOW)
 #define LED_OFF digitalWrite(ledPin, HIGH)
+#define LED_TOGGLE digitalWrite(ledPin, !digitalRead(ledPin))
+
+#define MSG_TIMEOUT 10     //in ms
+#define WIFI_TIMEOUT 20    //in s
+#define MS_TIMEOUT 2000    //in ms
+#define MS_TIMEOUT_MIN (MS_TIMEOUT-1000000) //in ms
+#define MSG_NEW msg.pos = POS_PREFIX
 
 typedef struct {
-    char name[LOOKER_WIFI_VAR_NAME_SIZE];
-    char value[LOOKER_WIFI_VAR_VALUE_SIZE];
+    char name[LOOKER_VAR_NAME_SIZE];
+    char value[LOOKER_VAR_VALUE_SIZE];
     unsigned char size;
     unsigned char type;
-    unsigned char html;
-    char style[LOOKER_WIFI_VAR_STYLE_SIZE];
-} looker_wifi_var_struct;
+    looker_label_t label;
+    char style[LOOKER_VAR_STYLE_SIZE];
+} var_t;
 
-void process(unsigned char c);
-void print_html(void);
+//globals
+looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_RESETING;
+var_t var[LOOKER_WIFI_VAR_COUNT_MAX];
+size_t var_cnt;      //total variables count
+unsigned char http_request;
+unsigned char page_refresh;
+unsigned char form_submitted;
+unsigned char debug=0;
+
+size_t msg_timeout;
+int ms_timeout = MS_TIMEOUT;
+
+size_t stat_s_loops;
+size_t stat_s_loops_old;
+size_t stat_s_loops_s;
+size_t stat_ms_updates;
+size_t stat_sm_updates;
+size_t stat_s_resets;
+size_t stat_msg_timeouts;
+size_t stat_ms_timeouts;
+size_t stat_msg_prefix_errors;
+size_t stat_msg_payload_errors;
+size_t stat_msg_checksum_errors;
+size_t ticker_cnt;
+
+char *ssid = NULL;
+char *pass = NULL;
+char *domain = NULL;
 
 int ledPin = 2; // GPIO2 on ESP8266
+size_t led_cnt, led_timeout;
 ESP8266WebServer server(80);
 MDNSResponder mdns;
-String webString="";
-looker_wifi_var_struct looker_var[LOOKER_WIFI_VAR_COUNT];
-unsigned char looker_var_count = 0;
-LOOKER_STATE state = LOOKER_STATE_START;
-int local_count = 0;    //delete after testing
-int hs = 0; //handshake
-char var_ready = 0;
-char uploading = 0;
 IPAddress ip_addr;
-char refresh = 1;   //refresh the page
+String webString="";
 Ticker ticker;
-int comm_timeout = TIMEOUT_DISABLED;
-int hs_timeout = TIMEOUT_DISABLED;
-unsigned char pos = 0;
 
-char ssid[20];
-char pass[20];
-char domain[20];
-typedef enum {
-    setup_ssid,
-    setup_pass,
-    setup_domain
-}   setup_t;
-setup_t setup_conn;
+#define TIMEOUT_CNT 100
+#include "stubs/looker_stubs.h"
+#include "stubs/looker_stubs.c"
+#include "msg.h"
 
-//todo: dat
-int debug1 = 0;
-int debug2 = 0;
+//prototypes
+void print_u64(char *v, unsigned long long i);
+void print_i64(char *v, long long i);
+long long atoll(const char *s);
+unsigned long long atoull(const char *s);
+void print_html(void);
 
-void change_state(LOOKER_STATE new_state)
+void stat_print(String string, size_t stat, unsigned char red)
 {
-    pos = 0;
-    switch (new_state) {
-        case LOOKER_STATE_START:
-            state = new_state;
-            comm_timeout = TIMEOUT_DISABLED;
-        break;
-        case LOOKER_STATE_CONNECT:
-        case LOOKER_STATE_REG_SIZE:
-        case LOOKER_STATE_REG_TYPE:
-        case LOOKER_STATE_REG_VALUE:
-        case LOOKER_STATE_REG_NAME:
-        case LOOKER_STATE_REG_HTML:
-        case LOOKER_STATE_REG_STYLE:
-        case LOOKER_STATE_UPDATE_VALUE:
-        case LOOKER_STATE_UPDATE_STYLE:
-            state = new_state;
-            comm_timeout = COMM_TIMEOUT;
-        break;
-    }
+    webString += "        ";
 
-    switch (new_state) {
-        case LOOKER_STATE_UPDATE_VALUE:
-        case LOOKER_STATE_UPDATE_STYLE:
-            uploading = 1;
-        break;
-    }
+    if (red && stat)
+        webString += "<p style='margin:0;color:red;'>";
+
+    webString += string + ": " + String(stat);
+
+    if (red && stat)
+        webString += "</p>\n";
+    else
+        webString += "<br>\n";
 }
 
-void process(unsigned char c)
+void led_period(size_t timeout)
 {
-    static int var_number;
-
-    if (comm_timeout > 0)
-        comm_timeout = COMM_TIMEOUT;
-
-    switch (state) {
-        case LOOKER_STATE_START:
-            setup_conn = setup_ssid;
-            var_number = -1;
-            switch (c) {
-                case LOOKER_COMM_RESET:
-                    looker_var_count = 0;
-                break;
-                case LOOKER_COMM_CONNECT:
-                    change_state(LOOKER_STATE_CONNECT);
-                break;
-                case LOOKER_COMM_REG:
-                    change_state(LOOKER_STATE_REG_SIZE);
-                break;
-                case LOOKER_COMM_UPDATE_VALUE:
-                    change_state(LOOKER_STATE_UPDATE_VALUE);
-                break;
-                case LOOKER_COMM_UPDATE_STYLE:
-                    change_state(LOOKER_STATE_UPDATE_STYLE);
-                break;
-                case LOOKER_COMM_HANDSHAKE:
-                    hs = 1;
-                    uploading = 0;
-                break;
-                default:
-                    //bad command
-                break;
-            }
-        break;
-
-        case LOOKER_STATE_CONNECT:
-            switch (setup_conn) {
-                case setup_ssid:
-                    ssid[pos++] = c;
-                    if (!c)
-                    {
-                        setup_conn = setup_pass;
-                        pos = 0;
-                    }
-                break;
-                case setup_pass:
-                    pass[pos++] = c;
-                    if (!c)
-                    {
-                        setup_conn = setup_domain;
-                        pos = 0;
-                    }
-                break;
-                case setup_domain:
-                    domain[pos++] = c;
-                    if (!c)
-                    {
-                        Serial.write(setup_wifi());
-                        change_state(LOOKER_STATE_START);
-                    }
-                break;
-            }
-        break;
-
-        case LOOKER_STATE_REG_SIZE:
-            looker_var[looker_var_count].size = c;
-            change_state(LOOKER_STATE_REG_TYPE);
-        break;
-
-        case LOOKER_STATE_REG_TYPE:
-            looker_var[looker_var_count].type = c;
-            change_state(LOOKER_STATE_REG_VALUE);
-        break;
-
-        case LOOKER_STATE_REG_VALUE:
-            looker_var[looker_var_count].value[pos++] = c;
-            if (looker_var[looker_var_count].type == LOOKER_VAR_STRING)
-            {
-                if (!c)
-                    change_state(LOOKER_STATE_REG_NAME);
-            }
-            else        
-                if (looker_var[looker_var_count].size == pos)
-                    change_state(LOOKER_STATE_REG_NAME);
-        break;
-
-        case LOOKER_STATE_REG_NAME:
-            looker_var[looker_var_count].name[pos++] = c;
-            if (!c)
-                change_state(LOOKER_STATE_REG_HTML);
-        break;
-
-        case LOOKER_STATE_REG_HTML:
-            looker_var[looker_var_count].html = c;
-            change_state(LOOKER_STATE_REG_STYLE);
-        break;
-
-        case LOOKER_STATE_REG_STYLE:
-            looker_var[looker_var_count].style[pos++] = c;
-            if (!c)
-            {
-                looker_var_count++;
-                change_state(LOOKER_STATE_START);
-            }
-        break;
-
-        case LOOKER_STATE_UPDATE_VALUE:
-            if (var_number >= 0)
-            {
-                looker_var[var_number].value[pos++] = c;
-                if (looker_var[var_number].type == LOOKER_VAR_STRING)
-                {
-                    if (!c)
-                        change_state(LOOKER_STATE_START);
-                }
-                else
-                    if (looker_var[var_number].size == pos)
-                        change_state(LOOKER_STATE_START);
-            }
-            else
-                var_number = c;
-        break;
-
-        case LOOKER_STATE_UPDATE_STYLE:
-            if (var_number >= 0)
-            {
-                looker_var[var_number].style[pos++] = c;
-                if (!c)
-                    change_state(LOOKER_STATE_START);
-            }
-            else
-                var_number = c;
-        break;
-    }
+    led_timeout = timeout;
 }
 
 void print_u64(char *v, unsigned long long i)
@@ -296,256 +166,6 @@ void print_i64(char *v, long long i)
     print_u64(v, i);
 }
 
-void print_html(void)
-{
-    webString =
-    "<!doctype html>\n"
-    "    <head>\n"
-    "        <title>Looker</title>\n";
-
-    webString += "    </head>\n";
-    webString += "    <body>\n";
-
-    webString += "        <h2>" + String(domain) + "</h2>\n";
-
-    //refresh
-    webString += "        <form>\n";
-    webString += "            <input type='hidden' name='looker_page_refresh'";
-    if (refresh)
-        webString += " value='0'>\n            <input type='submit' value='Turn refresh OFF'><br>\n";
-    else
-        webString += " value='1'>\n            <input type='submit' value='Turn refresh ON'><br>\n";
-    webString += "        </form><br>\n";
-
-    
-    webString += "        <form>\n";
-
-    for (int i=0; i<looker_var_count; i++)
-    {
-        unsigned long long value_int = 0;
-        char value_text[(LOOKER_WIFI_VAR_VALUE_SIZE > 20) ? (LOOKER_WIFI_VAR_VALUE_SIZE + 1) : (20 + 1)]; //20 is the length of max 64-bit number
-        if (looker_var[i].type == LOOKER_VAR_INT)
-        {
-            memcpy(&value_int, looker_var[i].value, looker_var[i].size);
-            if (looker_var[i].size == 8)
-                print_i64(value_text, (long long) value_int);
-            else
-            {
-                if (value_int & (1LU << ((8 * looker_var[i].size) - 1)))
-                    value_int = -~value_int-1;
-                sprintf(value_text, "%ld", (long long) value_int);
-            }
-        }
-        else if (looker_var[i].type == LOOKER_VAR_UINT)
-        {
-            memcpy(&value_int, looker_var[i].value, looker_var[i].size);
-            if (looker_var[i].size == 8)
-                print_u64(value_text, value_int);
-            else 
-                sprintf(value_text, "%lu", value_int);
-        }
-        else if (looker_var[i].type == LOOKER_VAR_STRING)
-            strcpy(value_text, looker_var[i].value);
-        else if ((looker_var[i].type >= LOOKER_VAR_FLOAT_0) && (looker_var[i].type <= LOOKER_VAR_FLOAT_4))
-        {
-            unsigned char prec = looker_var[i].type - LOOKER_VAR_FLOAT_0;
-            if (looker_var[i].size == sizeof(float))
-            {
-                float f;
-                memcpy(&f, looker_var[i].value, sizeof(f));
-                dtostrf(f, 1, prec, value_text);
-            }
-            else if (looker_var[i].size == sizeof(double))
-            {
-                double d;
-                memcpy(&d, looker_var[i].value, sizeof(d));
-                dtostrf(d, 1, prec, value_text);
-            }
-        }
-
-        webString += "            ";
-        if (strlen(looker_var[i].style))
-        {
-            webString += "<p style='";
-            webString += looker_var[i].style;
-            webString += "'>";
-        }
-        else
-            webString += "<p>";
-        webString += looker_var[i].name;
-        webString += ": ";
-
-        if (looker_var[i].html == LOOKER_HTML_VIEW)
-            webString += value_text;
-        else if (looker_var[i].html == LOOKER_HTML_EDIT)
-        {
-            webString += "<input ";
-            if (strlen(looker_var[i].style))
-            {
-                webString += "style='";
-                webString += looker_var[i].style;
-                webString += "' ";
-            }
-            webString += "type='text' name='";
-            webString += looker_var[i].name;
-            webString += "' value='";
-            webString += value_text;
-            webString += "'>";
-        }
-        else if (looker_var[i].html == LOOKER_HTML_CHECKBOX)
-        {
-            webString += "<input type='hidden' name='";
-            webString += looker_var[i].name;
-            webString += "' value='0'>\n";
-
-            webString += "            ";
-            webString += "<input type='checkbox' name='";
-            webString += looker_var[i].name;
-            webString += "' value='1'";
-            if (value_int)
-                webString += "checked";
-            webString += ">";
-        }
-        else if (looker_var[i].html == LOOKER_HTML_CHECKBOX_INV)
-        {
-            webString += "<input type='hidden' name='";
-            webString += looker_var[i].name;
-            webString += "' value='1'>\n";
-
-            webString += "            ";
-            webString += "<input type='checkbox' name='";
-            webString += looker_var[i].name;
-            webString += "' value='0'";
-            if (!value_int)
-                webString += "checked";
-            webString += ">";
-        }
-
-        webString += "</p>\n";
-    }
-/*
-webString += String(server.args()) + "<br>";
-for (int i=0; i<server.args(); i++)
-  webString += server.argName(i) + ": " + server.arg(i) + "<br>";
-*/   
-
-    if (!looker_var_count)
-    {
-        webString += "SSID: " + String(ssid) + "<br>\n";
-        webString += "LOOKER_WIFI_VAR_COUNT: " + String(LOOKER_WIFI_VAR_COUNT) + "<br>\n";
-        webString += "LOOKER_WIFI_VAR_VALUE_SIZE: " + String(LOOKER_WIFI_VAR_COUNT) + "<br>\n";
-        webString += "LOOKER_WIFI_VAR_NAME_SIZE: " + String(LOOKER_WIFI_VAR_COUNT) + "<br>\n";
-    }
-    else
-        webString += "            <br><input type='submit' value='Submit'><br>\n";
-
-    webString += "        </form>\n";
-
-    //todo: dat
-    //webString += "hs_timeout: " + String(hs_timeout) + "\n";  
-
-    if (hs_timeout == 0)
-        webString += "        <h3>Error: Target Sync Timeout !!!</h2>\n";
-
-    if (refresh)
-    {
-        webString += "        <script>\n";
-        webString += "            window.setTimeout(function(){window.location.href=window.location.href.split('?')[0]},1000);\n";
-        webString += "        </script>\n";
-    }
-
-    webString += "    </body>\n";
-    webString += "</html>\n";
-
-    server.send(200, "text/html", webString);
-}
-
-void print_debug(void)
-{
-    String webString2;
-
-    webString2 =
-    "local_count: " + String(local_count) + "\n"
-    "looker_var_count: " + String(looker_var_count) + "\n"
-    "state: " + String(state) + "\n"
-    "size: " + String(looker_var[0].size) + "\n"
-    "type: " + String(looker_var[0].type) + "\n"
-    "html: " + String(looker_var[0].html) + "\n"
-    "name: " + looker_var[0].name + "\n"
-    "debug1: " + String(debug1) + "\n"
-    "debug2: " + String(debug2) + "\n";
-    server.send(200, "text/text", webString2);
-}
-
-void ticker_handler()
-{
-    if (comm_timeout > 0)
-        comm_timeout--;
-
-    if (hs_timeout > 0)
-        hs_timeout--;
-}
-
-void handle_root() {
-    LED_ON;
-
-    if (server.args())
-    {   
-        if (strcmp(server.argName(0).c_str(), "looker_page_refresh") == 0)
-        //one argument = looker_page_refresh
-        {
-            refresh = (char) strtoul(server.arg(0).c_str(), NULL, 10);
-        }
-        else
-        //more = vars
-        {
-            var_ready = 1;
-            hs_timeout = HS_TIMEOUT;
-            return;
-        }
-    }
-
-    if (!uploading)
-    {
-        print_html();
-        hs_timeout = TIMEOUT_DISABLED;
-        LED_OFF;
-    }
-    else
-        hs_timeout = HS_TIMEOUT;
-}
- 
-LOOKER_EXIT_CODE setup_wifi(void)
-{
-    if (WiFi.status() != WL_CONNECTED)
-    {        
-        // Connect to WiFi network
-        WiFi.begin(ssid, pass);
-
-        int i = 0;
-        // Wait for connection
-        do {
-            digitalWrite(ledPin, !digitalRead(ledPin));
-            delay(100);
-            if (++i >= (WIFI_TIMEOUT * 10))
-            {
-                WiFi.disconnect();
-                return LOOKER_EXIT_SERVER_TIMEOUT;
-            }
-        } while (WiFi.status() != WL_CONNECTED);
-
-        ip_addr = WiFi.localIP();
-
-        if (domain[0])
-            mdns.begin(domain, ip_addr);
-
-        server.on("/", handle_root);
-        server.begin();
-        LED_OFF;
-    }
-    return LOOKER_EXIT_SUCCESS;
-}
-
 long long atoll(const char *s)
 {
     long long l = 0;
@@ -587,110 +207,367 @@ unsigned long long atoull(const char *s)
     return l;
 }
 
+void print_html(void)
+{
+    webString =
+    "<!doctype html>\n"
+    "    <head>\n"
+    "        <title>Looker</title>\n";
+
+    webString += "    </head>\n";
+    webString += "    <body>\n";
+
+    if (domain)
+        webString += "        <h2>" + String(domain) + "</h2>\n";
+
+    //refresh
+    webString += "        <form>\n";
+    webString += "            <input type='hidden' name='looker_page_refresh'";
+    if (page_refresh)
+        webString += " value='0'>\n            <input type='submit' value='Turn refresh OFF'><br>\n";
+    else
+        webString += " value='1'>\n            <input type='submit' value='Turn refresh ON'><br>\n";
+    webString += "        </form><br>\n";
+
+    if (ms_timeout >= 0)
+    {
+        webString += "        <form>\n";
+
+        for (int i=0; i<var_cnt; i++)
+        {
+            unsigned long long value_int = 0;
+            char value_text[(LOOKER_WIFI_VAR_VALUE_SIZE > 20) ? (LOOKER_WIFI_VAR_VALUE_SIZE + 1) : (20 + 1)]; //20 is the length of max 64-bit number
+
+            if ((var[i].label == LOOKER_LABEL_SSID) || (var[i].label == LOOKER_LABEL_PASS) || (var[i].label == LOOKER_LABEL_DOMAIN))
+                continue;
+
+            if (var[i].type == LOOKER_TYPE_INT)
+            {
+                memcpy(&value_int, var[i].value, var[i].size);
+                if (var[i].size == 8)
+                    print_i64(value_text, (long long) value_int);
+                else
+                {
+                    if (value_int & (1LU << ((8 * var[i].size) - 1)))
+                        value_int = -~value_int-1;
+                    sprintf(value_text, "%ld", (long long) value_int);
+                }
+            }
+            else if (var[i].type == LOOKER_TYPE_UINT)
+            {
+                memcpy(&value_int, var[i].value, var[i].size);
+                if (var[i].size == 8)
+                    print_u64(value_text, value_int);
+                else 
+                    sprintf(value_text, "%lu", value_int);
+            }
+            else if (var[i].type == LOOKER_TYPE_STRING)
+                strcpy(value_text, var[i].value);
+            else if ((var[i].type >= LOOKER_TYPE_FLOAT_0) && (var[i].type <= LOOKER_TYPE_FLOAT_4))
+            {
+                unsigned char prec = var[i].type - LOOKER_TYPE_FLOAT_0;
+                if (var[i].size == sizeof(float))
+                {
+                    float f;
+                    memcpy(&f, var[i].value, sizeof(f));
+                    dtostrf(f, 1, prec, value_text);
+                }
+                else if (var[i].size == sizeof(double))
+                {
+                    double d;
+                    memcpy(&d, var[i].value, sizeof(d));
+                    dtostrf(d, 1, prec, value_text);
+                }
+            }
+
+            webString += "            ";
+            if (strlen(var[i].style))
+            {
+                webString += "<p style='";
+                webString += var[i].style;
+                webString += "'>";
+            }
+            else
+                webString += "<p>";
+            webString += var[i].name;
+            webString += ": ";
+
+            if (var[i].label == LOOKER_LABEL_VIEW)
+                webString += value_text;
+            else if (var[i].label == LOOKER_LABEL_EDIT)
+            {
+                webString += "<input ";
+                if (strlen(var[i].style))
+                {
+                    webString += "style='";
+                    webString += var[i].style;
+                    webString += "' ";
+                }
+                webString += "type='text' name='";
+                webString += var[i].name;
+                webString += "' value='";
+                webString += value_text;
+                webString += "'>";
+            }
+            else if (var[i].label == LOOKER_LABEL_CHECKBOX)
+            {
+                webString += "<input type='hidden' name='";
+                webString += var[i].name;
+                webString += "' value='0'>\n";
+
+                webString += "            ";
+                webString += "<input type='checkbox' name='";
+                webString += var[i].name;
+                webString += "' value='1'";
+                if (value_int)
+                    webString += "checked";
+                webString += ">";
+            }
+            else if (var[i].label == LOOKER_LABEL_CHECKBOX_INV)
+            {
+                webString += "<input type='hidden' name='";
+                webString += var[i].name;
+                webString += "' value='1'>\n";
+
+                webString += "            ";
+                webString += "<input type='checkbox' name='";
+                webString += var[i].name;
+                webString += "' value='0'";
+                if (!value_int)
+                    webString += "checked";
+                webString += ">";
+            }
+
+            webString += "</p>\n";
+        }
+
+        if (!var_cnt)
+            webString += "No Variables<br>\n";
+        else
+            webString += "            <br><input type='submit' value='Submit'><br>\n";
+
+        webString += "        </form>\n";
+    }
+    else
+        webString += "        <h3>Error: Master->Slave Timeout: " + String((MS_TIMEOUT-ms_timeout)/1000) + " s</h3>\n";
+
+    if (debug)
+    {
+        webString += "        <h2>Debug:</h2>\n";
+
+        stat_print("S Loops", stat_s_loops, 0);
+        stat_print("S Loops/s", stat_s_loops_s, 0);
+        stat_print("S Resets", stat_s_resets, 0);
+        stat_print("MS Updates", stat_ms_updates, 0);
+        stat_print("MS Timeouts", stat_ms_timeouts, 1);
+        stat_print("MS ACK Failures", stat_ack_get_failures, 1);
+        stat_print("SM Updates", stat_sm_updates, 0);
+        stat_print("SM ACK Failures", stat_ack_send_failures, 1);
+        stat_print("Msg Timeouts", stat_msg_timeouts, 1);
+        stat_print("Msg Prefix Errors", stat_msg_prefix_errors, 1);
+        stat_print("Msg Payload Errors", stat_msg_payload_errors, 1);
+        stat_print("Msg Checksum Errors", stat_msg_checksum_errors, 1);
+    }
+
+    if (page_refresh)
+    {
+        webString += "        <script>\n";
+        webString += "            window.setTimeout(function(){window.location.href=window.location.href.split('?')[0]},1000);\n";
+        webString += "        </script>\n";
+    }
+
+    webString += "    </body>\n";
+    webString += "</html>\n";
+
+    server.send(200, "text/html", webString);
+}
+
+void ticker_handler()
+{
+    if (msg_timeout)
+        if (!--msg_timeout)
+        {
+            MSG_NEW;
+            stat_msg_timeouts++;
+        }
+
+    if (ms_timeout > MS_TIMEOUT_MIN)
+        if (--ms_timeout == 0)
+        {
+            if (!looker_data_available())
+                stat_ms_timeouts++;
+        }
+    if (led_timeout)
+        if (++led_cnt >= led_timeout)
+        {
+            LED_TOGGLE;
+            led_cnt = 0;
+        }
+
+    if (++ticker_cnt >= 1000)
+    {
+        stat_s_loops_s = stat_s_loops - stat_s_loops_old;
+        stat_s_loops_old = stat_s_loops;
+        ticker_cnt = 0;
+    }
+}
+
+void handle_root()
+{
+    if (server.args())
+    {
+        if (strcmp(server.argName(0).c_str(), "looker_page_refresh") == 0)
+            page_refresh = (unsigned char) strtoul(server.arg(0).c_str(), NULL, 10);
+        else if (strcmp(server.argName(0).c_str(), "looker_debug") == 0)
+        {
+            debug = (unsigned char) strtoul(server.arg(0).c_str(), NULL, 10);
+            if (!debug)
+            {
+                stat_s_loops = 0;
+                stat_s_loops_old = 0;
+                stat_s_loops_s = 0;
+                stat_ms_updates = 0;
+                stat_sm_updates = 0;
+                stat_s_resets = 0;
+                stat_ack_get_failures = 0;
+                stat_ack_send_failures = 0;
+                stat_msg_timeouts = 0;
+                stat_ms_timeouts = 0;
+                stat_msg_prefix_errors = 0;
+                stat_msg_payload_errors = 0;
+                stat_msg_checksum_errors = 0;
+            }
+        }
+        else
+//todo: copy args to buffer - will help with multiple http requests
+            form_submitted = 1;
+    }
+    http_request = 1;
+}
+ 
+looker_exit_t sm_update(size_t i)
+{
+    size_t j;
+    unsigned char ack;
+
+    msg.payload_size = 0;
+    msg.payload[msg.payload_size++] = COMMAND_UPDATE_VALUE;
+    msg.payload[msg.payload_size++] = i;
+
+    memcpy(&msg.payload[msg.payload_size], var[i].value, var[i].size);
+    msg.payload_size += var[i].size;
+
+    do
+    {
+        msg_send();
+
+        //wait for ack
+        for (j=0; j<TIMEOUT_CNT; j++)
+        {
+            looker_delay();
+            if (looker_data_available())
+            {
+                ack = ack_get();
+                break;
+            }
+            else
+                ack = ACK_FAILURE; 
+        }
+
+        //timeout
+        if (j >= TIMEOUT_CNT)
+            return LOOKER_EXIT_TIMEOUT;
+
+    } while (ack != ACK_SUCCESS);
+
+    return LOOKER_EXIT_SUCCESS;
+}
+
 void var_process(const char *var_name, const char *var_value)
 {
-    if (!looker_var_count)
+    if (!var_cnt)
         return; 
 
     //find
     int i = 0;
-    while ((i < looker_var_count) && (strcmp(looker_var[i].name, var_name) != 0))
+    while ((i < var_cnt) && (strcmp(var[i].name, var_name) != 0))
         i++;
 
-    if (i == looker_var_count)
+    if (i == var_cnt)
         return;
 
     //replace if different
-    switch (looker_var[i].type) {
-        case LOOKER_VAR_INT:
+    switch (var[i].type) {
+        case LOOKER_TYPE_INT:
         {
             long long value_new, value_old;
             value_new = atoll(var_value);
             value_old = 0;
-            memcpy(&value_old, looker_var[i].value, looker_var[i].size);
+            memcpy(&value_old, var[i].value, var[i].size);
 
             if (value_new != value_old)
             {
-                memcpy(looker_var[i].value, &value_new, looker_var[i].size);
-                Serial.write(LOOKER_COMM_UPDATE_VALUE);
-                Serial.write(i);
-                int size;
-                size = looker_var[i].size;
-                for (int j=0; j<size; j++)
-                    Serial.write(looker_var[i].value[j]);
+                memcpy(var[i].value, &value_new, var[i].size);
+                sm_update(i);
                 return;
             }
         break;
         }
-        case LOOKER_VAR_UINT:
+        case LOOKER_TYPE_UINT:
         {
             unsigned long long value_new, value_old;
             value_new = atoull(var_value);
             value_old = 0;
-            memcpy(&value_old, looker_var[i].value, looker_var[i].size);
+            memcpy(&value_old, var[i].value, var[i].size);
 
             if (value_new != value_old)
             {
-                memcpy(looker_var[i].value, &value_new, looker_var[i].size);
-                Serial.write(LOOKER_COMM_UPDATE_VALUE);
-                Serial.write(i);
-                int size;
-                size = looker_var[i].size;
-                for (int j=0; j<size; j++)
-                    Serial.write(looker_var[i].value[j]);
+                memcpy(var[i].value, &value_new, var[i].size);
+                sm_update(i);
                 return;
             }
         break;
         }
-        case LOOKER_VAR_FLOAT_0:
-        case LOOKER_VAR_FLOAT_1:
-        case LOOKER_VAR_FLOAT_2:
-        case LOOKER_VAR_FLOAT_3:
-        case LOOKER_VAR_FLOAT_4:
+        case LOOKER_TYPE_FLOAT_0:
+        case LOOKER_TYPE_FLOAT_1:
+        case LOOKER_TYPE_FLOAT_2:
+        case LOOKER_TYPE_FLOAT_3:
+        case LOOKER_TYPE_FLOAT_4:
         {
             double value_new, value_old;
             float f;
 
             value_new = atof(var_value);
             value_old = 0;
-            if (looker_var[i].size == sizeof(float))
+            if (var[i].size == sizeof(float))
             {
-                memcpy(&f, looker_var[i].value, looker_var[i].size);
+                memcpy(&f, var[i].value, var[i].size);
                 value_old = (double) f;
             }
             else
-                memcpy(&value_old, looker_var[i].value, looker_var[i].size);
+                memcpy(&value_old, var[i].value, var[i].size);
 
             if (value_new != value_old)
             {
-                if (looker_var[i].size == sizeof(float))
+                if (var[i].size == sizeof(float))
                 {
                     f = (float) value_new;
-                    memcpy(looker_var[i].value, &f, looker_var[i].size);
+                    memcpy(var[i].value, &f, var[i].size);
                 }
                 else
-                    memcpy(looker_var[i].value, &value_new, looker_var[i].size);
+                    memcpy(var[i].value, &value_new, var[i].size);
 
-                Serial.write(LOOKER_COMM_UPDATE_VALUE);
-                Serial.write(i);
-                int size;
-                size = looker_var[i].size;
-                for (int j=0; j<size; j++)
-                    Serial.write(looker_var[i].value[j]);
+                sm_update(i);
                 return;
             }
         break;
         }
-        case LOOKER_VAR_STRING:
-            if (strcmp(looker_var[i].value, var_value) != 0)
+        case LOOKER_TYPE_STRING:
+            if (strcmp(var[i].value, var_value) != 0)
             {
-                strcpy(looker_var[i].value, var_value);
-                Serial.write(LOOKER_COMM_UPDATE_VALUE);
-                Serial.write(i);
-                int size;
-                size = strlen(looker_var[i].value) + 1;
-                for (int j=0; j<size; j++)
-                    Serial.write(looker_var[i].value[j]);
+                strcpy(var[i].value, var_value);
+                var[i].size = strlen(var[i].value) + 1;
+                sm_update(i);
                 return;
             }
         break;
@@ -709,75 +586,217 @@ void setup(void)
 
     pinMode(ledPin, OUTPUT);
     LED_ON;
+    led_period(500);
 
-    Serial.begin(115200);
-/*
-    if (Serial.available() > 0)
-    {
-      Serial.read();
-      delay(1);
+    serial_init();
+}
+
+static void register_process(void)
+{
+    size_t i = 1;
+
+    //only new variable
+    if (msg.payload[i++] != var_cnt)
+        return;
+
+    var[var_cnt].size = msg.payload[i++];
+    var[var_cnt].type = msg.payload[i++];
+
+    memcpy(&var[var_cnt].value, &msg.payload[i], var[var_cnt].size);
+    i += var[var_cnt].size;
+
+    strcpy(var[var_cnt].name, (char *) &msg.payload[i]);
+    i += strlen(var[var_cnt].name) + 1;
+
+    var[var_cnt].label = (looker_label_t) msg.payload[i++];
+
+    strcpy(var[var_cnt].style, (char *) &msg.payload[i]);
+    i += strlen(var[var_cnt].style) + 1;
+
+    if (var[var_cnt].label == LOOKER_LABEL_SSID)
+        ssid = (char *) &var[var_cnt].value;
+    else if (var[var_cnt].label == LOOKER_LABEL_PASS)
+        pass = (char *) &var[var_cnt].value;
+    if (var[var_cnt].label == LOOKER_LABEL_DOMAIN)
+        domain = (char *) &var[var_cnt].value;
+
+    var_cnt++;
+}
+
+static looker_exit_t payload_process(void)
+{
+    size_t i, j;
+    unsigned char ack;
+
+    switch (msg.payload[0]) {
+
+        case COMMAND_RESET:
+            var_cnt = 0;
+
+            if (WiFi.status() == WL_CONNECTED)
+                slave_state = LOOKER_SLAVE_STATE_CONNECTED;
+            else
+                slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
+            stat_s_resets++;
+            ack_send(ACK_SUCCESS);
+        break;
+        case COMMAND_CONNECT:
+            ack_send(ACK_SUCCESS);
+        break;
+        case COMMAND_STATUS:
+            ack_send(ACK_SUCCESS);
+        break;
+        case COMMAND_REGISTER:
+            register_process();
+            stat_ms_updates++;
+            ack_send(ACK_SUCCESS);
+        break;
+        case COMMAND_UPDATE_VALUE:
+            memcpy(var[msg.payload[1]].value, &msg.payload[2], var[msg.payload[1]].size);
+            stat_ms_updates++;
+            ack_send(ACK_SUCCESS);
+        break;
+        case COMMAND_UPDATE_STYLE:
+            memcpy(var[msg.payload[1]].style, &msg.payload[2], var[msg.payload[1]].size);
+            stat_ms_updates++;
+            ack_send(ACK_SUCCESS);
+        break;
+        case COMMAND_UPDATE_GET:
+            ack_send(ACK_SUCCESS);
+
+            LED_ON;
+
+            //vars
+            if (form_submitted)
+            {
+                for (i=0; i<server.args(); i++)
+                {
+                    //process only last variable with same name
+                    j = i+1;
+                    while ((j<server.args()) && (strcmp(server.argName(i).c_str(), server.argName(j).c_str()) != 0))
+                        j++;
+
+                    if (j == server.args())
+                    {
+                        var_process(server.argName(i).c_str(), server.arg(i).c_str());
+                        stat_sm_updates++;
+                    }
+                }
+                form_submitted = 0;
+            }
+
+            //status
+            do
+            {
+                msg.payload_size = 0;
+                msg.payload[msg.payload_size++] = COMMAND_STATUS;
+                msg.payload[msg.payload_size++] = slave_state;
+
+                msg_send();
+                
+                //wait for ack
+                for (j=0; j<TIMEOUT_CNT; j++)
+                {
+                    looker_delay();
+                    if (looker_data_available())
+                    {
+                        ack = ack_get();
+                        break;
+                    }
+                }
+
+                //timeout
+                if (j >= TIMEOUT_CNT)
+                {
+                    return LOOKER_EXIT_TIMEOUT;
+                }
+            } while (ack != ACK_SUCCESS);
+
+            //all good
+            if (http_request)
+            {
+                print_html();
+                http_request = 0;
+            }
+                
+            LED_OFF;
+            stat_s_loops++;
+            ms_timeout = MS_TIMEOUT;
+        break;
+
+        default:
+            return LOOKER_EXIT_BAD_COMMAND;
+        break;
     }
-*/
+    return LOOKER_EXIT_SUCCESS;
 }
 
 void loop(void)
 {
-    //todo: maybe this is slow, maybe global variable would be faster   
-    if (WiFi.status() == WL_CONNECTED)  
-        server.handleClient();
- 
-    if (Serial.available() > 0)
+    //todo: maybe this is slow, maybe global variable is faster
+    if (WiFi.status() == WL_CONNECTED)
     {
-        int serial_data = Serial.read();
-        process(serial_data);
-        local_count++;
+        if (slave_state == LOOKER_SLAVE_STATE_CONNECTING)
+        {
+            ip_addr = WiFi.localIP();
+            if (domain)
+                mdns.begin(domain, ip_addr);
+            server.on("/", handle_root);
+            server.begin();
+            led_period(0);
+            slave_state = LOOKER_SLAVE_STATE_CONNECTED;
+        }
+        else
+            server.handleClient();
+    }
+    else
+    {
+        if ((slave_state == LOOKER_SLAVE_STATE_DISCONNECTED) && (ssid))
+        {
+            // Connect to WiFi network
+            if (pass) 
+                WiFi.begin(ssid, pass);
+            else
+                WiFi.begin(ssid);
+            led_period(100);
+            slave_state = LOOKER_SLAVE_STATE_CONNECTING;
+        }
     }
 
-    if (hs)
+    if (looker_data_available())
     {
-        if (var_ready)
+        unsigned char err = msg_get();
+        if (!err)
         {
-            //update vars and send locally if different
-            for (int i=0; i<server.args(); i++)
+            if (msg_complete())
             {
-                //process only last variable with same name
-                int j = i+1;
-                while ((j<server.args()) && (strcmp(server.argName(i).c_str(), server.argName(j).c_str()) != 0))
-                    j++;
-
-                if (j == server.args())
-                    var_process(server.argName(i).c_str(), server.arg(i).c_str());
+                msg_timeout = 0;
+                payload_process();
             }
-            
-            print_html();
-            var_ready = 0;
-            hs_timeout = TIMEOUT_DISABLED;
-            LED_OFF;
         }
-        else if (hs_timeout > 0)
+        else
         {
-            print_html();
-            hs_timeout = TIMEOUT_DISABLED;
-            LED_OFF;
+            MSG_NEW;
+            if (err == 1)
+                stat_msg_prefix_errors++;
+            else if (err == 2)
+                stat_msg_payload_errors++;
+            else if (err == 3)
+                stat_msg_checksum_errors++;
+            
+            //empty rx buffer
+            unsigned char rx;
+            while (looker_data_available())
+                looker_get(&rx, 1);
+            ack_send(ACK_FAILURE);
         }
-
-        Serial.write(LOOKER_COMM_HANDSHAKE);
-        hs = 0;
     }
 
-    if (comm_timeout == 0)
-    {
-        state = LOOKER_STATE_START;
-        comm_timeout = TIMEOUT_DISABLED;
-    }
-
-    if (hs_timeout == 0)
+    if ((ms_timeout < 0) && (http_request))
     {
         print_html();
-//        print_debug();  //todo: dat
-        var_ready = 0;
-        hs_timeout = TIMEOUT_DISABLED;
-        LED_OFF;
+        form_submitted = 0;
+        http_request = 0;
     }
 }
 

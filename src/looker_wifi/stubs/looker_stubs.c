@@ -1,10 +1,20 @@
+void looker_delay(void)
+{
+    delay(1);
+}
+
+size_t looker_data_available(void)
+{
+    return Serial.available();
+}
+
 int looker_get(void *buf, int size)   //non blocking read
 {
     int num = 0;
 
-    while ((num < size) && (Serial1.available() > 0))
+    while ((num < size) && (Serial.available() > 0))
     {
-        *((char *)buf) = (char) Serial1.read();
+        *((char *)buf) = (char) Serial.read();
         buf = buf + 1;
         num++;
     }
@@ -20,8 +30,13 @@ void looker_send(void *buf, int size)
     {
         c =  *((char *)buf);
         buf = buf + 1;
-        Serial1.write((byte) c);
+        Serial.write((byte) c);
         delay(10);
     }
+}
+
+void serial_init(void)
+{
+    Serial.begin(57600);
 }
 
