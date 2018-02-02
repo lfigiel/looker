@@ -29,7 +29,9 @@ HTTP server dynamically creates a simple website that lists out some variables f
 Looker is released under **MIT** open source license.
 
 ## Hello World
-*/src/examples/arduino/helloWorld*
+*src/examples/arduino/helloWorld*
+
+[src/examples/arduino/helloWorld](src/examples/arduino/helloWorld)
 ### This is a simple Arduino app to read ADC and drive LED from a website:
 
 ```C
@@ -190,6 +192,7 @@ Max size of style (string) is limited in *looker.h*:
 
 For more info refer to:  
 *src/examples/arduino/style*
+
 ---
 ```C
 void looker_update(void)
