@@ -11,5 +11,5 @@ Copyright (c) 2018 Lukasz Figiel
 #define LOOKER_MSG_PAYLOAD_SIZE_MAX 61  //61+1+1+1=64
 #define LOOKER_MSG_PREFIX (LOOKER_MSG_PAYLOAD_SIZE_MAX + 1)
 #define ACK_SUCCESS 0
-#define ACK_FAILURE 1
+#define ACK_FAILURE 255
 
