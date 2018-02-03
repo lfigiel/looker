@@ -8,8 +8,8 @@ The system is successfully ported to broad range of Arduino, ARM and PC projects
 
 Looker is divided into two parts:
 
-1. HTTP server running on ESP8266: *src/looker_wifi*
-2. Library to be imported to a custom project: *src/looker*
+1. [HTTP server](src/looker_wifi/looker_wifi.ino) running on ESP8266
+2. [Library](src/looker) to be imported to a custom project
 
 Looker library and HTTP server are synchronized over a serial port.
 
@@ -26,11 +26,10 @@ HTTP server dynamically creates a simple website that lists out some variables f
 3. Remote debugging. Being able to view and modify variables on fly can make debugging easier specially when a specialized debugger is not available. 
 
 ## Licensing
-Looker is released under **MIT** open source license.
+Looker is released under **[MIT](LICENSE)** open source license.
 
 ## Hello World
-[src/examples/arduino/helloWorld](src/examples/arduino/helloWorld)
-### This is a simple Arduino app to read ADC and drive LED from a website:
+### This is a simple Arduino [app](src/examples/arduino/helloWorld/helloWorld.ino) to read ADC and drive LED from a website:
 
 ```C
 #include "looker.h"
@@ -188,8 +187,7 @@ Max size of style (string) is limited in *looker.h*:
 #define LOOKER_VAR_STYLE_SIZE 48
 ```
 
-For more info refer to:  
-[src/examples/arduino/style](src/examples/arduino/style)
+For more info refer to Arduino app [style](src/examples/arduino/style/style.ino)
 
 ---
 ```C
