@@ -164,7 +164,7 @@ same as above but with inverted state.This is useful if the checkbox controls a 
 *LOOKER_LABEL_VIEW*  
 variable is read only  
 
-LOOKER_LABEL_EDIT*  
+*LOOKER_LABEL_EDIT*  
 variable can be edited
 
 **style**  
