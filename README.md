@@ -29,8 +29,6 @@ HTTP server dynamically creates a simple website that lists out some variables f
 Looker is released under **MIT** open source license.
 
 ## Hello World
-*src/examples/arduino/helloWorld*
-
 [src/examples/arduino/helloWorld](src/examples/arduino/helloWorld)
 ### This is a simple Arduino app to read ADC and drive LED from a website:
 
@@ -65,7 +63,7 @@ void loop() {
 
 ```
 ### The device is now accessible at address: http://arduino.local
-![alt text](https://raw.githubusercontent.com/lfigiel/looker/master/src/examples/arduino/helloWorld/helloWorld.png)
+![alt text](src/examples/arduino/helloWorld/helloWorld.png)
 
 **.local** is added to the domain by multicast Domain Name System (mDNS) that Looker is using.
 
@@ -191,7 +189,7 @@ Max size of style (string) is limited in *looker.h*:
 ```
 
 For more info refer to:  
-*src/examples/arduino/style*
+[src/examples/arduino/style](src/examples/arduino/style)
 
 ---
 ```C
