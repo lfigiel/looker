@@ -427,7 +427,16 @@ void looker_update(void)
             if (looker_data_available())
             {
                 if (ack_get() == ACK_SUCCESS)
-                    master_state_change(MASTER_STATE_SYNC);
+                {
+                    //get status from slave
+                    if (var_update_master())
+                    {
+                        master_state_change(MASTER_STATE_RESET);
+                        break;
+                    }
+                    else
+                        master_state_change(MASTER_STATE_SYNC);
+                }
                 else
                 {
                     master_state_change(MASTER_STATE_RESET);
