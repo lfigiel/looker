@@ -11,8 +11,6 @@
 //globals
 unsigned int i,j = 0;
 char k[16] = "empty";
-unsigned int resets;
-looker_slave_state_t slave_state_current, slave_state_old;
 
 int main(int argc, char *argv[])
 {
@@ -22,27 +20,15 @@ int main(int argc, char *argv[])
     looker_reg("j", &j, sizeof(j), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, DEFAULT_STYLE);
     looker_reg("k", &k, sizeof(k), LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, DEFAULT_STYLE);
 
-    looker_reg("resets", &resets, sizeof(resets), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE);
-
     while (1)
     {
         //index
         i++;
 
-        //state
-        slave_state_current = looker_slave_state();
-        if (slave_state_current == LOOKER_SLAVE_STATE_RESETING)
-        {
-            if (slave_state_current != slave_state_old)
-                resets++;
-        }
-
-        slave_state_old = slave_state_current;
-
         printf("port: %s, j: %d, k: %s, i: %d\n", argv[1], j, k, i);
         looker_update();
 
-        sleep(1);
+        usleep(100000);
     }
 
     looker_destroy();

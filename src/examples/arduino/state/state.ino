@@ -8,7 +8,7 @@
 //globals
 volatile unsigned int i;
 unsigned char led = 0;
-looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_RESETING;
+looker_slave_state_t slave_state;
 
 void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
@@ -31,7 +31,7 @@ void loop() {
         led = 0;
     else if (slave_state == LOOKER_SLAVE_STATE_CONNECTING)
         led ^= 1;
-    else if (slave_state == LOOKER_SLAVE_STATE_RESETING)
+    else if (slave_state == LOOKER_SLAVE_STATE_UNKNOWN)
         led = 1;
     
     digitalWrite(LED_BUILTIN, led);

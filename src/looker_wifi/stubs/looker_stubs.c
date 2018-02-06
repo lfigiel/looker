@@ -1,3 +1,8 @@
+#ifdef DEBUG
+#include <SoftwareSerial.h>
+SoftwareSerial mySerial(SW_SERIAL_UNUSED_PIN, 4);  //RX, TX
+#endif //DEBUG
+
 void looker_delay(void)
 {
     delay(1);
@@ -38,5 +43,9 @@ void looker_send(void *buf, int size)
 void serial_init(void)
 {
     Serial.begin(57600);
+#ifdef DEBUG
+    mySerial.begin(57600);
+#endif //DEBUG
+
 }
 

@@ -70,7 +70,7 @@ typedef struct {
 
 //globals
 static master_state_t master_state = MASTER_STATE_RESET;
-static looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_RESETING;
+static looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_UNKNOWN;
 #ifdef LOOKER_USE_MALLOC
 static var_t *var = NULL;
 #else
@@ -95,12 +95,12 @@ static void master_state_change(master_state_t state)
     switch(state) {
         case MASTER_STATE_RESET:
             master_state = state;
-            slave_state = LOOKER_SLAVE_STATE_RESETING;
+            slave_state = LOOKER_SLAVE_STATE_UNKNOWN;
         break;
 
         case MASTER_STATE_RESET_ACK:
             master_state = state;
-            slave_state = LOOKER_SLAVE_STATE_RESETING;
+            slave_state = LOOKER_SLAVE_STATE_UNKNOWN;
         break;
 
         case MASTER_STATE_SYNC:
@@ -449,11 +449,15 @@ void looker_update(void)
                 break;
             }
 
-            //update slave
-            if (var_update_slave())
+            //only if slave is connected
+            if (slave_state == LOOKER_SLAVE_STATE_CONNECTED)
             {
-                master_state_change(MASTER_STATE_RESET);
-                break;
+                //update slave
+                if (var_update_slave())
+                {
+                    master_state_change(MASTER_STATE_RESET);
+                    break;
+                }
             }
 
             //update master
@@ -463,34 +467,37 @@ void looker_update(void)
                 break;
             }
 
-            //validate
-            for (i=0; i<var_cnt; i++)
+            //only if slave is connected
+            if (slave_state == LOOKER_SLAVE_STATE_CONNECTED)
             {
-                //value
-                if (var[i].value_update == UPDATED_FROM_MASTER)
+                //validate
+                for (i=0; i<var_cnt; i++)
                 {
-                    PRINTF("Update from master MMMMMMM\n");
-                    memcpy(var[i].value_old, (const void *) var[i].value_current, var[i].size);
-                }
-                else if (var[i].value_update == UPDATED_FROM_SLAVE)
-                {
-                    PRINTF("Update from slave SSSSSSS\n");
-                    memcpy(var[i].value_current, var[i].value_slave, var[i].size);
-                    memcpy(var[i].value_old, var[i].value_slave, var[i].size);
-                }
+                    //value
+                    if (var[i].value_update == UPDATED_FROM_MASTER)
+                    {
+                        PRINTF("Update from master MMMMMMM\n");
+                        memcpy(var[i].value_old, (const void *) var[i].value_current, var[i].size);
+                    }
+                    else if (var[i].value_update == UPDATED_FROM_SLAVE)
+                    {
+                        PRINTF("Update from slave SSSSSSS\n");
+                        memcpy(var[i].value_current, var[i].value_slave, var[i].size);
+                        memcpy(var[i].value_old, var[i].value_slave, var[i].size);
+                    }
 
-                //style
+                    //style
 #ifdef LOOKER_STYLE_DYNAMIC
-                if (var[i].style_update == UPDATED_FROM_MASTER)
-                {
-                    if (var[i].style_current)
-                        strcpy(var[i].style_old, var[i].style_current);
-                    else
-                        var[i].style_old[0] = 0;
-                }
+                    if (var[i].style_update == UPDATED_FROM_MASTER)
+                    {
+                        if (var[i].style_current)
+                            strcpy(var[i].style_old, var[i].style_current);
+                        else
+                            var[i].style_old[0] = 0;
+                    }
 #endif //LOOKER_STYLE_DYNAMIC
+                }
             }
-
         break;
 
         default:
@@ -584,8 +591,8 @@ static looker_exit_t payload_process(void)
 #ifdef DEBUG
             PRINTF("  slave_state: ");
             switch (slave_state) {
-                case LOOKER_SLAVE_STATE_RESETING:
-                    PRINTF("RESETING\n");
+                case LOOKER_SLAVE_STATE_UNKNOWN:
+                    PRINTF("UNKNOWN\n");
                 break;
                 case LOOKER_SLAVE_STATE_DISCONNECTED:
                     PRINTF("DISCONNECTED\n");

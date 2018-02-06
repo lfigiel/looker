@@ -52,7 +52,7 @@ typedef struct {
 } var_t;
 
 //globals
-looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_RESETING;
+looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_UNKNOWN;
 var_t var[LOOKER_WIFI_VAR_COUNT_MAX];
 size_t var_cnt;      //total variables count
 unsigned char http_request;
@@ -586,7 +586,7 @@ void setup(void)
 
     pinMode(ledPin, OUTPUT);
     LED_ON;
-    led_period(500);
+    led_period(0);
 
     serial_init();
 }
@@ -664,8 +664,6 @@ static looker_exit_t payload_process(void)
         case COMMAND_UPDATE_GET:
             ack_send(ACK_SUCCESS);
 
-            LED_ON;
-
             //vars
             if (form_submitted)
             {
@@ -719,7 +717,6 @@ static looker_exit_t payload_process(void)
                 http_request = 0;
             }
                 
-            LED_OFF;
             stat_s_loops++;
             ms_timeout = MS_TIMEOUT;
         break;
@@ -743,7 +740,7 @@ void loop(void)
                 mdns.begin(domain, ip_addr);
             server.on("/", handle_root);
             server.begin();
-            led_period(0);
+            led_period(500);
             slave_state = LOOKER_SLAVE_STATE_CONNECTED;
         }
         else
@@ -758,9 +755,11 @@ void loop(void)
                 WiFi.begin(ssid, pass);
             else
                 WiFi.begin(ssid);
-            led_period(100);
+            led_period(80);
             slave_state = LOOKER_SLAVE_STATE_CONNECTING;
         }
+        else if (slave_state == LOOKER_SLAVE_STATE_CONNECTED)
+          slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
     }
 
     if (looker_data_available())

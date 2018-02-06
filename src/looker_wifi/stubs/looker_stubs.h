@@ -11,8 +11,8 @@
 //#define DEBUG
 
 #ifdef DEBUG
-    #define PRINTF(a)
-    #define PRINTF1(a,b)
+    #define PRINTF(a) mySerial.print(a)
+    #define PRINTF1(a,b) mySerial.print(a); mySerial.println(b)
     #define PRINTF2(a,b,c)
 #else
     #define PRINTF(a)
