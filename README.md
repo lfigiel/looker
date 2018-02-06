@@ -156,7 +156,7 @@ Maximum size – including string is limited in *looker.h*:
 specifies how the variable is presented on the website. Following variants are supported:  
 
 *LOOKER_LABEL_CHECKBOX*  
-checkbox, suitable for bool (TRUE/FALLS) variables  
+checkbox, suitable for bool (TRUE/FALSE) variables  
 
 *LOOKER_LABEL_CHECKBOX_INV*  
 same as above but with inverted state.This is useful if the checkbox controls a LED. Depending on LED polarity having normal and inverted state allows to always have: checked – LED on, unchecked – LED off  
