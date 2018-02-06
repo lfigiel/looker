@@ -56,7 +56,6 @@ looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_UNKNOWN;
 var_t var[LOOKER_WIFI_VAR_COUNT_MAX];
 size_t var_cnt;      //total variables count
 unsigned char http_request;
-unsigned char page_refresh;
 unsigned char form_submitted;
 unsigned char debug=0;
 
@@ -212,26 +211,39 @@ void print_html(void)
     webString =
     "<!doctype html>\n"
     "    <head>\n"
-    "        <title>Looker</title>\n";
-
-    webString += "    </head>\n";
-    webString += "    <body>\n";
+    "        <title>Looker</title>\n"
+    "    </head>\n"
+    "    <body>\n";
 
     if (domain)
         webString += "        <h2>" + String(domain) + "</h2>\n";
 
-    //refresh
-    webString += "        <form>\n";
-    webString += "            <input type='hidden' name='looker_page_refresh'";
-    if (page_refresh)
-        webString += " value='0'>\n            <input type='submit' value='Turn refresh OFF'><br>\n";
-    else
-        webString += " value='1'>\n            <input type='submit' value='Turn refresh ON'><br>\n";
-    webString += "        </form><br>\n";
+    webString +=
+    "        <button id='refresh_id' onclick='refresh_func()'></button>\n"
+    "        <script>\n"
+    "            var refresh_label = 'Turn refresh OFF'\n"
+    "            var refresh_timeout;\n"
+    "            if (refresh_label == 'Turn refresh OFF')\n"
+    "                refresh_timeout = window.setTimeout(function(){window.location.href=window.location.href.split('?')[0]},1000);\n"
+    "            document.getElementById('refresh_id').innerHTML = refresh_label;\n"
+    "            function refresh_func() {\n"
+    "                if (refresh_label == 'Turn refresh OFF')\n"
+    "                {\n"
+    "                    clearTimeout(refresh_timeout);\n"
+    "                    refresh_label = 'Turn refresh ON';\n"
+    "                }\n"
+    "                else\n"
+    "                {\n"
+    "                    refresh_timeout = window.setTimeout(function(){window.location.href=window.location.href.split('?')[0]},1000);\n"
+    "                    refresh_label = 'Turn refresh OFF';\n"
+    "                }\n"
+    "                document.getElementById('refresh_id').innerHTML = refresh_label;\n"
+    "            }\n"
+    "        </script>\n";
 
     if (ms_timeout >= 0)
     {
-        webString += "        <form>\n";
+        webString += "        <form><br>\n";
 
         for (int i=0; i<var_cnt; i++)
         {
@@ -369,13 +381,6 @@ void print_html(void)
         stat_print("Msg Checksum Errors", stat_msg_checksum_errors, 1);
     }
 
-    if (page_refresh)
-    {
-        webString += "        <script>\n";
-        webString += "            window.setTimeout(function(){window.location.href=window.location.href.split('?')[0]},1000);\n";
-        webString += "        </script>\n";
-    }
-
     webString += "    </body>\n";
     webString += "</html>\n";
 
@@ -416,9 +421,7 @@ void handle_root()
 {
     if (server.args())
     {
-        if (strcmp(server.argName(0).c_str(), "looker_page_refresh") == 0)
-            page_refresh = (unsigned char) strtoul(server.arg(0).c_str(), NULL, 10);
-        else if (strcmp(server.argName(0).c_str(), "looker_debug") == 0)
+        if (strcmp(server.argName(0).c_str(), "looker_debug") == 0)
         {
             debug = (unsigned char) strtoul(server.arg(0).c_str(), NULL, 10);
             if (!debug)
