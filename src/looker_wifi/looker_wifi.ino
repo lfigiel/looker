@@ -36,9 +36,10 @@ lfigiel@gmail.com
 #define LED_OFF digitalWrite(ledPin, HIGH)
 #define LED_TOGGLE digitalWrite(ledPin, !digitalRead(ledPin))
 
-#define MSG_TIMEOUT 10     //in ms
-#define WIFI_TIMEOUT 20    //in s
-#define MS_TIMEOUT 2000    //in ms
+#define ACK_TIMEOUT 1000   //ms
+#define MSG_TIMEOUT 10     //ms
+#define WIFI_TIMEOUT 20    //s
+#define MS_TIMEOUT 2000    //ms
 #define MS_TIMEOUT_MIN (MS_TIMEOUT-1000000) //in ms
 #define MSG_NEW msg.pos = POS_PREFIX
 
@@ -52,7 +53,7 @@ typedef struct {
 } var_t;
 
 //globals
-looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_UNKNOWN;
+looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
 var_t var[LOOKER_WIFI_VAR_COUNT_MAX];
 size_t var_cnt;      //total variables count
 unsigned char http_request;
@@ -467,7 +468,7 @@ looker_exit_t sm_update(size_t i)
         //wait for ack
         for (j=0; j<TIMEOUT_CNT; j++)
         {
-            looker_delay();
+            looker_delay_1ms();
             if (looker_data_available())
             {
                 ack = ack_get();
@@ -644,8 +645,22 @@ static looker_exit_t payload_process(void)
             ack_send(ACK_SUCCESS);
         break;
         case COMMAND_CONNECT:
+            if (slave_state == LOOKER_SLAVE_STATE_DISCONNECTED)
+            {
+                // Connect to WiFi network
+                if (pass) 
+                    WiFi.begin(ssid, pass);
+                else
+                    WiFi.begin(ssid);
+                led_period(80);
+                slave_state = LOOKER_SLAVE_STATE_CONNECTING;
+            }
             ack_send(ACK_SUCCESS);
         break;
+        case COMMAND_DISCONNECT:
+            WiFi.disconnect();
+            ack_send(ACK_SUCCESS);
+        break;        
         case COMMAND_STATUS:
             ack_send(ACK_SUCCESS);
         break;
@@ -698,7 +713,7 @@ static looker_exit_t payload_process(void)
                 //wait for ack
                 for (j=0; j<TIMEOUT_CNT; j++)
                 {
-                    looker_delay();
+                    looker_delay_1ms();
                     if (looker_data_available())
                     {
                         ack = ack_get();
@@ -751,18 +766,8 @@ void loop(void)
     }
     else
     {
-        if ((slave_state == LOOKER_SLAVE_STATE_DISCONNECTED) && (ssid))
-        {
-            // Connect to WiFi network
-            if (pass) 
-                WiFi.begin(ssid, pass);
-            else
-                WiFi.begin(ssid);
-            led_period(80);
-            slave_state = LOOKER_SLAVE_STATE_CONNECTING;
-        }
-        else if (slave_state == LOOKER_SLAVE_STATE_CONNECTED)
-          slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
+        if (slave_state == LOOKER_SLAVE_STATE_CONNECTED)
+            slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
     }
 
     if (looker_data_available())

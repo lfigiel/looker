@@ -16,14 +16,14 @@ void setup() {
     delay(500);
     serial_init();
 
-    looker_init(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
+    looker_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
     looker_reg("i", &i, sizeof(i), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, NULL);
 }
 
 void loop() {
     //slave state
     //LED:
-    //  solid - not connected
+    //  solid - unknown or disconnected
     //  alternate - connecting
     //  off - connected
     slave_state = looker_slave_state();
@@ -31,7 +31,7 @@ void loop() {
         led = 0;
     else if (slave_state == LOOKER_SLAVE_STATE_CONNECTING)
         led ^= 1;
-    else if (slave_state == LOOKER_SLAVE_STATE_UNKNOWN)
+    else if ((slave_state == LOOKER_SLAVE_STATE_UNKNOWN) || (slave_state == LOOKER_SLAVE_STATE_UNKNOWN))
         led = 1;
     
     digitalWrite(LED_BUILTIN, led);

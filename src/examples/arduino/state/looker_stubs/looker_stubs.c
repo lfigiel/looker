@@ -19,7 +19,7 @@ void serial_init(void)
 #endif //SOFTWARE_SERIAL
 }
 
-void looker_delay(void)
+void looker_delay_1ms(void)
 {
     delay(1);   //1ms
 }

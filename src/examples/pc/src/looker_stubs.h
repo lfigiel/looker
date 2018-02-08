@@ -21,7 +21,7 @@
 #endif //DEBUG
 
 //prototypes
-EXTERN void looker_delay(void);
+EXTERN void looker_delay_1ms(void);
 EXTERN size_t looker_data_available(void);
 EXTERN int looker_get(void *buf, int size);
 EXTERN void looker_send(void *buf, int size);

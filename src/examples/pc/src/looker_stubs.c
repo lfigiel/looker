@@ -13,7 +13,7 @@
 
 static int fd;
 
-void looker_delay(void)
+void looker_delay_1ms(void)
 {
     usleep(1000);   //1ms
 }

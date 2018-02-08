@@ -68,7 +68,9 @@ typedef enum {
 #endif //LOOKER_STYLE_DYNAMIC
 
 //prototypes
-looker_exit_t looker_init(const char *ssid, const char *pass, const char *domain);
+void looker_init(void);
+looker_exit_t looker_connect(const char *ssid, const char *pass, const char *domain);
+void looker_disconnect(void);
 looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, STYLE_TYPE style);
 void looker_update(void);
 void looker_destroy(void);

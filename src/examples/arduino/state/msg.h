@@ -1,6 +1,7 @@
 typedef enum {
     COMMAND_RESET,
     COMMAND_CONNECT,
+    COMMAND_DISCONNECT,
     COMMAND_STATUS,
     COMMAND_REGISTER,
     COMMAND_UPDATE_VALUE,
@@ -38,18 +39,18 @@ size_t stat_ack_get_failures;
 size_t stat_ack_send_failures;
 
 //prototypes
-static void command_send(command_t command);
 static unsigned char ack_get(void);
 static void ack_send(unsigned char ack);
+static void msg_begin(command_t command);
 static unsigned char msg_complete(void);
 static unsigned char msg_get(void);
 static void msg_send(void);
+static looker_exit_t ack_wait(unsigned char *aAck);
 
-static void command_send(command_t command)
+static void msg_begin(command_t command)
 {
     msg.payload_size = 0;
     msg.payload[msg.payload_size++] = command;
-    msg_send();
 }
 
 static unsigned char ack_get(void)
@@ -202,6 +203,10 @@ static void msg_send(void)
             PRINTF("->CONNECT\n");
         break;
 
+        case COMMAND_DISCONNECT:
+            PRINTF("->DISCONNECT\n");
+        break;
+
         case COMMAND_STATUS:
             PRINTF("->STATUS\n");
         break;
@@ -234,5 +239,31 @@ static unsigned char msg_complete(void)
     unsigned char complete = msg.complete;
     msg.complete = 0;
     return complete;
+}
+
+looker_exit_t ack_wait(unsigned char *aAck)
+{
+    //wait for ack
+    size_t j;
+    for (j=0; j<ACK_TIMEOUT; j++)
+    {
+        looker_delay_1ms();
+        if (looker_data_available())
+        {
+            *aAck = ack_get();
+            break;
+        }
+    }
+
+    //timeout
+    if (j >= ACK_TIMEOUT)
+    {
+        PRINTF1("timeout: %lu\n", j);
+        return LOOKER_EXIT_TIMEOUT;
+    }
+    else
+        PRINTF1("time: %lu\n", j);
+
+    return LOOKER_EXIT_SUCCESS;
 }
 

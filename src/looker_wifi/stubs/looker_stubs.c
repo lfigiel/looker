@@ -3,7 +3,7 @@
 SoftwareSerial mySerial(SW_SERIAL_UNUSED_PIN, 4);  //RX, TX
 #endif //DEBUG
 
-void looker_delay(void)
+void looker_delay_1ms(void)
 {
     delay(1);
 }

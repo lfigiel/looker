@@ -11,7 +11,7 @@
     printf("looker init ... ");
 
 
-	if ((err = looker_init(LOOKER_SSID, LOOKER_PASS, DOMAIN)))
+	if ((err = looker_connect(LOOKER_SSID, LOOKER_PASS, DOMAIN)))
     {
         printf("Error: %d\n", err);
         return 1;
