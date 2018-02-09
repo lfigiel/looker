@@ -1,4 +1,4 @@
-#include "looker.h"
+#include "looker_master.h"
 #include "wifi.h"
 #include "looker_stubs.h"
 #include "looker_stubs/looker_stubs.c"
@@ -21,6 +21,9 @@ void setup() {
 }
 
 void loop() {
+    //index
+    i++;
+
     //slave state
     //LED:
     //  solid - unknown or disconnected
@@ -31,13 +34,11 @@ void loop() {
         led = 0;
     else if (slave_state == LOOKER_SLAVE_STATE_CONNECTING)
         led ^= 1;
-    else if ((slave_state == LOOKER_SLAVE_STATE_UNKNOWN) || (slave_state == LOOKER_SLAVE_STATE_UNKNOWN))
+    else if ((slave_state == LOOKER_SLAVE_STATE_DISCONNECTED) || (slave_state == LOOKER_SLAVE_STATE_UNKNOWN))
         led = 1;
-    
-    digitalWrite(LED_BUILTIN, led);
 
-    //index
-    i++;
+    //LED
+    digitalWrite(LED_BUILTIN, led);
 
     looker_update();
 }

@@ -28,8 +28,8 @@ lfigiel@gmail.com
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <Ticker.h>
-#include "looker_wifi.h"
-#include "looker.h"
+#include "looker_slave.h"
+#include "looker_master.h"
 #include "checksum.h"
 
 #define LED_ON digitalWrite(ledPin, LOW)
@@ -44,12 +44,12 @@ lfigiel@gmail.com
 #define MSG_NEW msg.pos = POS_PREFIX
 
 typedef struct {
-    char name[LOOKER_VAR_NAME_SIZE];
-    char value[LOOKER_VAR_VALUE_SIZE];
+    char name[LOOKER_WIFI_VAR_NAME_SIZE];
+    char value[LOOKER_WIFI_VAR_VALUE_SIZE];
     unsigned char size;
     unsigned char type;
     looker_label_t label;
-    char style[LOOKER_VAR_STYLE_SIZE];
+    char style[LOOKER_WIFI_VAR_STYLE_SIZE];
 } var_t;
 
 //globals
@@ -58,7 +58,7 @@ var_t var[LOOKER_WIFI_VAR_COUNT_MAX];
 size_t var_cnt;      //total variables count
 unsigned char http_request;
 unsigned char form_submitted;
-unsigned char debug=0;
+unsigned char *debug = NULL;
 
 size_t msg_timeout;
 int ms_timeout = MS_TIMEOUT;
@@ -234,10 +234,7 @@ void print_html(void)
     "                    refresh_label = 'Turn refresh ON';\n"
     "                }\n"
     "                else\n"
-    "                {\n"
-    "                    refresh_timeout = window.setTimeout(function(){window.location.href=window.location.href.split('?')[0]},1000);\n"
-    "                    refresh_label = 'Turn refresh OFF';\n"
-    "                }\n"
+    "                    window.location.href=window.location.href.split('?')[0];\n"
     "                document.getElementById('refresh_id').innerHTML = refresh_label;\n"
     "            }\n"
     "        </script>\n";
@@ -364,10 +361,11 @@ void print_html(void)
     else
         webString += "        <h3>Error: Master->Slave Timeout: " + String((MS_TIMEOUT-ms_timeout)/1000) + " s</h3>\n";
 
-    if (debug)
+    if ((debug) && (*debug))
     {
         webString += "        <h2>Debug:</h2>\n";
 
+        stat_print("S State", slave_state, 0);
         stat_print("S Loops", stat_s_loops, 0);
         stat_print("S Loops/s", stat_s_loops_s, 0);
         stat_print("S Resets", stat_s_resets, 0);
@@ -422,29 +420,8 @@ void handle_root()
 {
     if (server.args())
     {
-        if (strcmp(server.argName(0).c_str(), "looker_debug") == 0)
-        {
-            debug = (unsigned char) strtoul(server.arg(0).c_str(), NULL, 10);
-            if (!debug)
-            {
-                stat_s_loops = 0;
-                stat_s_loops_old = 0;
-                stat_s_loops_s = 0;
-                stat_ms_updates = 0;
-                stat_sm_updates = 0;
-                stat_s_resets = 0;
-                stat_ack_get_failures = 0;
-                stat_ack_send_failures = 0;
-                stat_msg_timeouts = 0;
-                stat_ms_timeouts = 0;
-                stat_msg_prefix_errors = 0;
-                stat_msg_payload_errors = 0;
-                stat_msg_checksum_errors = 0;
-            }
-        }
-        else
 //todo: copy args to buffer - will help with multiple http requests
-            form_submitted = 1;
+        form_submitted = 1;
     }
     http_request = 1;
 }
@@ -528,6 +505,26 @@ void var_process(const char *var_name, const char *var_value)
             {
                 memcpy(var[i].value, &value_new, var[i].size);
                 sm_update(i);
+
+                if (!strcmp(var[i].name, "looker_debug"))
+                {
+                    if (!value_new)     //reset stats if looker_debug changes from 1 -> 0
+                    {
+                        stat_s_loops = 0;
+                        stat_s_loops_old = 0;
+                        stat_s_loops_s = 0;
+                        stat_ms_updates = 0;
+                        stat_sm_updates = 0;
+                        stat_s_resets = 0;
+                        stat_ack_get_failures = 0;
+                        stat_ack_send_failures = 0;
+                        stat_msg_timeouts = 0;
+                        stat_ms_timeouts = 0;
+                        stat_msg_prefix_errors = 0;
+                        stat_msg_payload_errors = 0;
+                        stat_msg_checksum_errors = 0;
+                    }
+                }
                 return;
             }
         break;
@@ -618,11 +615,14 @@ static void register_process(void)
     i += strlen(var[var_cnt].style) + 1;
 
     if (var[var_cnt].label == LOOKER_LABEL_SSID)
-        ssid = (char *) &var[var_cnt].value;
+        ssid = (char *) &var[var_cnt].name;
     else if (var[var_cnt].label == LOOKER_LABEL_PASS)
-        pass = (char *) &var[var_cnt].value;
+        pass = (char *) &var[var_cnt].name;
     if (var[var_cnt].label == LOOKER_LABEL_DOMAIN)
-        domain = (char *) &var[var_cnt].value;
+        domain = (char *) &var[var_cnt].name;
+
+    if (!strcmp(var[var_cnt].name, "looker_debug"))
+        debug = (unsigned char *) &var[var_cnt].value;
 
     var_cnt++;
 }
@@ -636,6 +636,7 @@ static looker_exit_t payload_process(void)
 
         case COMMAND_RESET:
             var_cnt = 0;
+            debug = NULL;
 
             if (WiFi.status() == WL_CONNECTED)
                 slave_state = LOOKER_SLAVE_STATE_CONNECTED;
@@ -761,8 +762,12 @@ void loop(void)
             led_period(500);
             slave_state = LOOKER_SLAVE_STATE_CONNECTED;
         }
-        else
-            server.handleClient();
+        else if (slave_state == LOOKER_SLAVE_STATE_DISCONNECTED)
+        {
+            led_period(500);
+            slave_state = LOOKER_SLAVE_STATE_CONNECTED;
+        }
+        server.handleClient();
     }
     else
     {

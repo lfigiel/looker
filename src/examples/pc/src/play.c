@@ -3,7 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "stubs/looker_stubs.h"
-#include "looker.h"
+#include "looker_master.h"
 #include "wifi.h"
 
 #define DOMAIN "pc"

@@ -7,12 +7,12 @@ extern "C" {
 #endif //__cplusplus
 
 #define LOOKER_USE_MALLOC
-#define LOOKER_VAR_COUNT_MAX 10
-#define LOOKER_VAR_VALUE_SIZE 22
-#define LOOKER_VAR_NAME_SIZE 22
-#define LOOKER_VAR_STYLE_SIZE 48
+#define LOOKER_VAR_COUNT_MAX 16
+#define LOOKER_VAR_NAME_SIZE 64
+#define LOOKER_VAR_VALUE_SIZE 16
+#define LOOKER_VAR_STYLE_SIZE 32
 #define LOOKER_SANITY_TEST
-#define LOOKER_STYLE_DYNAMIC
+//#define LOOKER_STYLE_DYNAMIC
 
 typedef enum {
     LOOKER_TYPE_INT,
@@ -46,6 +46,8 @@ typedef enum {
     LOOKER_EXIT_BAD_COMMAND,
     LOOKER_EXIT_BAD_STATE,
     LOOKER_EXIT_TIMEOUT,
+    LOOKER_EXIT_ACK_FAILURE,
+    LOOKER_EXIT_NO_DATA,
 
     LOOKER_EXIT_LAST
 } looker_exit_t;
@@ -72,7 +74,7 @@ void looker_init(void);
 looker_exit_t looker_connect(const char *ssid, const char *pass, const char *domain);
 void looker_disconnect(void);
 looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, STYLE_TYPE style);
-void looker_update(void);
+looker_exit_t looker_update(void);
 void looker_destroy(void);
 looker_slave_state_t looker_slave_state(void);
 #ifdef __cplusplus

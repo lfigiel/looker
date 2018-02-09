@@ -11,8 +11,8 @@ TARGET = stress
 
 TARGET_DIR = src
 STUBS_DIR = src
-LOOKER_DIR = ../../looker
-LOOKER_WIFI_DIR = ../../looker_wifi
+LOOKER_MASTER_DIR = ../../looker_master
+LOOKER_SLAVE_DIR = ../../looker_slave
 LIBCRC_DIR = ../../crc8
 BIN_DIR = bin
 CFLAGS = -Wall -O2 -c -MMD -I$(shell pwd)/$(STUBS_DIR)
@@ -25,7 +25,7 @@ else
     ECHO = @
 endif
 
-OBJ = $(BIN_DIR)/$(TARGET).o $(BIN_DIR)/looker.o $(BIN_DIR)/looker_stubs.o $(BIN_DIR)/crc8.o
+OBJ = $(BIN_DIR)/$(TARGET).o $(BIN_DIR)/looker_master.o $(BIN_DIR)/looker_stubs.o $(BIN_DIR)/crc8.o
 
 .PHONY: all run clean debug
 
@@ -40,7 +40,7 @@ $(BIN_DIR)/$(TARGET): $(OBJ)
 $(BIN_DIR)/$(TARGET).o: $(TARGET_DIR)/$(TARGET).c
 	$(ECHO) gcc $(CFLAGS) -o $@ $<
 
-$(BIN_DIR)/looker.o: $(LOOKER_DIR)/looker.c
+$(BIN_DIR)/looker_master.o: $(LOOKER_MASTER_DIR)/looker_master.c
 	$(ECHO) gcc $(CFLAGS) -o $@ $<
 
 $(BIN_DIR)/looker_stubs.o: $(STUBS_DIR)/looker_stubs.c

@@ -8,8 +8,8 @@ The system is successfully ported to broad range of Arduino, ARM and PC projects
 
 Looker is divided into two parts:
 
-1. [HTTP server](src/looker_wifi/looker_wifi.ino) running on ESP8266
-2. [Library](src/looker) to be imported to a custom project
+1. [HTTP server](src/looker_slave) running on ESP8266
+2. [Library](src/looker_master) to be imported to a custom project
 
 Looker library and HTTP server are synchronized over a serial port.
 
@@ -32,7 +32,7 @@ Looker is released under **[MIT](LICENSE)** open source license.
 ### This is a simple Arduino [app](src/examples/arduino/helloWorld/helloWorld.ino) to read ADC and drive LED from a website:
 
 ```C
-#include "looker.h"
+#include "looker_master.h"
 #include "wifi.h"
 #include "looker_stubs.h"
 #include "looker_stubs/looker_stubs.c"
@@ -112,7 +112,7 @@ Registers the variable making it accessible from the website.
 variable will be showed under this name on the website. The name does not need to be the same as the C variable.
 Max size of this name (string) is limited in *looker.h*:
 ```C
-#define LOOKER_VAR_NAME_SIZE 16
+#define LOOKER_VAR_NAME_SIZE 32
 ```
 **addr**  
 address of the variable
@@ -191,7 +191,7 @@ For more info refer to Arduino app [style](src/examples/arduino/style/style.ino)
 
 ---
 ```C
-void looker_update(void)
+looker_exit_t looker_update(void)
 ```
 Synchronizes all registered variables with the web server.
 If a variable changes locally looker_update changes it also on the website and the other way around.
