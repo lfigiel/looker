@@ -172,17 +172,17 @@ Example:
 ```C
 #define STYLE "color:red;"	//red text
 ```
-Style can be disabled, fixed or variable:
-*LOOKER_STYLE_DISABLED*
-no CSS is used
+Style can be disabled, fixed or variable:  
+*LOOKER_STYLE_DISABLED*  
+no CSS is used  
 
-*LOOKER_STYLE_FIXED*
-style is fixed and cannot be changed
+*LOOKER_STYLE_FIXED*  
+style is fixed and cannot be changed  
 
-*LOOKER_STYLE_VARIABLE*
-style can be changed on fly but this requires more RAM.
+*LOOKER_STYLE_VARIABLE*  
+style can be changed on fly but this requires more RAM.  
 
-This selects the style for master (*looker_master.h*) and slave (*looker_slave.h*)
+The following selects the style for master (*looker_master.h*) and slave (*looker_slave.h*)
 ```C
 #define LOOKER_MASTER_STYLE LOOKER_STYLE_VARIABLE
 #define LOOKER_SLAVE_STYLE LOOKER_STYLE_VARIABLE
@@ -217,7 +217,7 @@ Each variable needs a block of data that defines this variable.
 This data can be allocated statically or dynamically.
 If the line is commented out static data is preferred.
 
-LOOKER_MASTER_VAR_COUNT/LOOKER_SLAVE_VAR_COUNT limits number of block of data to be allocated but with static they are all used. Therefore this value should be equal to the number of variables intended to use otherwise extra RAM will be wasted. With dynamic data block is allocated per variable (still up to LOOKER_MASTER_VAR_COUNT/LOOKER_SLAVE_VAR_COUNT) so RAM is better utilized. The trade off is that malloc function itself takes some space specially if it is not used elsewhere and it gets linked specially for Looker. Also data for static variables are guaranteed at the compilation time whereas dynamic data only during run time. Depending on resources, other prior malloc usage it might be possible that there will not be enough memory for Looker to allocate. 
+LOOKER_MASTER_VAR_COUNT/LOOKER_SLAVE_VAR_COUNT limits number of blocks of data to be allocated but with static they are all used. Therefore this value should be equal to the number of variables intended to use otherwise extra RAM will be wasted. With dynamic data block is allocated per variable (still up to LOOKER_MASTER_VAR_COUNT/LOOKER_SLAVE_VAR_COUNT) so RAM is better utilized. The trade off is that malloc function itself takes some space specially if it is not used elsewhere and it gets linked specially for Looker. Also data for static variables are guaranteed at the compilation time whereas dynamic data only during run time. Depending on resources, other prior malloc usage it might be possible that there will not be enough memory for Looker to allocate. 
 ```C
 #define LOOKER_MASTER_SANITY_TEST
 #define LOOKER_SLAVE_SANITY_TEST
