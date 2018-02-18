@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include "stubs/looker_stubs.h"
+#include "looker_stubs.h"
 #include "looker_master.h"
 #include "wifi.h"
 
@@ -17,10 +17,10 @@ int main(int argc, char *argv[])
     float f = 3.14;
     double d = 4.14;
 
-	if (looker_reg("f", &f, sizeof(f), LOOKER_VAR_FLOAT, LOOKER_HTML_EDIT, DEFAULT_STYLE))
+	if (looker_reg("f", &f, sizeof(f), LOOKER_TYPE_FLOAT_2, LOOKER_LABEL_EDIT, DEFAULT_STYLE))
         printf("Error\n");
 
-	if (looker_reg("d", &d, sizeof(d), LOOKER_VAR_FLOAT, LOOKER_HTML_EDIT, DEFAULT_STYLE))
+	if (looker_reg("d", &d, sizeof(d), LOOKER_TYPE_FLOAT_2, LOOKER_LABEL_EDIT, DEFAULT_STYLE))
         printf("Error\n");
 
     printf("%ld\n", sizeof(f));

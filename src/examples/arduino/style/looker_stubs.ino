@@ -1,20 +1,21 @@
 #define LOOKER_STUBS_C
+#include "looker_stubs.h"
 
 #define SOFTWARE_SERIAL
+#define BAUD_RATE 57600
 
 #ifdef SOFTWARE_SERIAL
 #include <SoftwareSerial.h>
 SoftwareSerial mySerial(10, 11);  //RX, TX
 #endif //SOFTWARE_SERIAL
 
-
 void serial_init(void)
 {
 #ifdef SOFTWARE_SERIAL
-    mySerial.begin(57600);
+    mySerial.begin(BAUD_RATE);
     pinMode(10, INPUT_PULLUP);
 #else
-    Serial1.begin(57600);
+    Serial1.begin(BAUD_RATE);
     pinMode(0, INPUT_PULLUP);
 #endif //SOFTWARE_SERIAL
 }

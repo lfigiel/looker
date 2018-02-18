@@ -1,8 +1,8 @@
 #include <stdio.h>
-#include <stdlib.h>
+//#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "stubs/looker_stubs.h"
+#include "looker_stubs.h"
 #include "looker_master.h"
 #include "wifi.h"
 
@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
 
     unsigned char play = 0;
 
-	if (looker_reg("Play", &play, sizeof(play), LOOKER_VAR_UINT, LOOKER_HTML_CHECKBOX, DEFAULT_STYLE))
+	if (looker_reg("Play", &play, sizeof(play), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, DEFAULT_STYLE))
         printf("Error\n");
 
     int i = 0;

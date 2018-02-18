@@ -1,10 +1,8 @@
 #include "looker_master.h"
-#include "wifi.h"
 #include "looker_stubs.h"
-#include "looker_stubs/looker_stubs.c"
+#include "wifi.h"
 
 #define LOOKER_DOMAIN "arduino"
-
 //globals
 volatile unsigned int i;
 unsigned char led = 0;
@@ -13,7 +11,6 @@ looker_slave_state_t slave_state;
 void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, 1);
-    delay(500);
     serial_init();
 
     looker_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);

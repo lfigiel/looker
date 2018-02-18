@@ -1,6 +1,10 @@
 #ifndef LOOKER_STUBS_H
 #define LOOKER_STUBS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif //__cplusplus
+
 #ifdef LOOKER_STUBS_C
     #define EXTERN
 #else
@@ -8,14 +12,12 @@
 #endif //LOOKER_STUBS_C
 
 //debug
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
-    #define DEBUG_CONNECTION
     #define DEBUG_MSG_DECODE
     #define DEBUG_MSG_ACK
     #define DEBUG_MSG_ACK_WAIT
-    #define DEBUG_SLAVE_STATUS
 
     EXTERN void debug_print(const char *s);
     EXTERN void debug_println2(const char *s, int i);
@@ -32,6 +34,8 @@ EXTERN size_t looker_data_available(void);
 EXTERN int looker_get(void *buf, int size);
 EXTERN void looker_send(void *buf, int size);
 EXTERN int serial_init(const char *portname);
-
+#ifdef __cplusplus
+}
+#endif //__cplusplus
 #endif //LOOKER_STUBS_H
 

@@ -26,6 +26,8 @@ volatile size_t stat_timeout;
 volatile size_t stat_ack_failure;
 volatile size_t stat_no_data;
 
+const char *style = DEFAULT_STYLE;
+
 void stat_update(looker_exit_t err)
 {
     switch (err) {
@@ -62,20 +64,20 @@ int main(int argc, char *argv[])
 {
 #include "prefix.c"
 
-    STAT(looker_reg("i", &i, sizeof(i), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE));
-    STAT(looker_reg("j", &j, sizeof(j), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, DEFAULT_STYLE));
-    STAT(looker_reg("k", &k, sizeof(k), LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, DEFAULT_STYLE));
+    STAT(looker_reg("i", &i, sizeof(i), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style));
+    STAT(looker_reg("j", &j, sizeof(j), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, &style));
+    STAT(looker_reg("k", &k, sizeof(k), LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, &style));
 
-    STAT(looker_reg("looker_debug", &looker_debug, sizeof(looker_debug), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, DEFAULT_STYLE));
+    STAT(looker_reg("looker_debug", &looker_debug, sizeof(looker_debug), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, &style));
 
-    STAT(looker_reg("success", &stat_success, sizeof(stat_success), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE));
-    STAT(looker_reg("no_memory", &stat_no_memory, sizeof(stat_no_memory), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE));
-    STAT(looker_reg("bad_param", &stat_bad_param, sizeof(stat_bad_param), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE));
-    STAT(looker_reg("bad_comm", &stat_bad_comm, sizeof(stat_bad_comm), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE));
-    STAT(looker_reg("bad_state", &stat_bad_state, sizeof(stat_bad_state), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE));
-    STAT(looker_reg("timeout", &stat_timeout, sizeof(stat_timeout), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE));
-    STAT(looker_reg("ack_failure", &stat_ack_failure, sizeof(stat_ack_failure), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE));
-    STAT(looker_reg("no_data", &stat_no_data, sizeof(stat_no_data), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE));
+    STAT(looker_reg("success", &stat_success, sizeof(stat_success), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style));
+    STAT(looker_reg("no_memory", &stat_no_memory, sizeof(stat_no_memory), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style));
+    STAT(looker_reg("bad_param", &stat_bad_param, sizeof(stat_bad_param), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style));
+    STAT(looker_reg("bad_comm", &stat_bad_comm, sizeof(stat_bad_comm), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style));
+    STAT(looker_reg("bad_state", &stat_bad_state, sizeof(stat_bad_state), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style));
+    STAT(looker_reg("timeout", &stat_timeout, sizeof(stat_timeout), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style));
+    STAT(looker_reg("ack_failure", &stat_ack_failure, sizeof(stat_ack_failure), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style));
+    STAT(looker_reg("no_data", &stat_no_data, sizeof(stat_no_data), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style));
 
     while (1)
     {
@@ -102,9 +104,6 @@ int main(int argc, char *argv[])
             looker_debug_old = 1;
 
         STAT(looker_update());
-
-//todo: it does not work w/o this delay
-        usleep(100000);
     }
 
     looker_destroy();

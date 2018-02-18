@@ -28,8 +28,7 @@ lfigiel@gmail.com
 #include <stdlib.h>
 #include <stdint.h>
 #include "looker_master.h"
-#include "looker_slave.h"
-#include "checksum.h"
+#include "msg.h"
 #include "looker_stubs.h"
 
 enum {
@@ -38,11 +37,7 @@ enum {
     UPDATED_FROM_SLAVE
 };
 
-#define ACK_TIMEOUT 1000    //ms
 #define RESET_POSTPOND 500  //ms
-
-//todo: change to .c
-#include "msg.h"
 
 typedef enum {
     MASTER_STATE_RESET = 0,
@@ -50,42 +45,46 @@ typedef enum {
     MASTER_STATE_SYNC
 } master_state_t;
 
+#pragma pack(1)
 typedef struct {
     const char *name;
     void *value_current;
-    char value_old[LOOKER_VAR_VALUE_SIZE];
-    char value_slave[LOOKER_VAR_VALUE_SIZE];
+    char value_old[LOOKER_MASTER_VAR_VALUE_SIZE];
+    char value_slave[LOOKER_MASTER_VAR_VALUE_SIZE];
     char value_update;
     unsigned char size;
     unsigned char type;
     looker_label_t label;
-#ifdef LOOKER_STYLE_DYNAMIC
-    char *style_current;
-    char style_old[LOOKER_VAR_STYLE_SIZE];
-    char style_update;
-#else
+#if LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED
     const char *style_current;
-#endif //LOOKER_STYLE_DYNAMIC
+#elif LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE
+    const char **style_current;
+    const char *style_old;
+#endif //LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED
+    unsigned char style_update;
 } var_t;
+#pragma pack()
 
 //globals
 static master_state_t master_state = MASTER_STATE_RESET;
 static looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_UNKNOWN;
-#ifdef LOOKER_USE_MALLOC
+#ifdef LOOKER_MASTER_USE_MALLOC
 static var_t *var = NULL;
 #else
-static var_t var[LOOKER_VAR_COUNT_MAX];
-#endif //LOOKER_USE_MALLOC
+static var_t var[LOOKER_MASTER_VAR_COUNT];
+#endif //LOOKER_MASTER_USE_MALLOC
 static size_t var_cnt;      //total variables count
 static size_t var_reg_cnt;  //total variables registered
-static unsigned char connect;
-static unsigned char disconnect;
+static looker_network_t network = LOOKER_NETWORK_DO_NOTHING;
+static msg_t msg;
 
 //prototypes
 static void master_state_change(master_state_t state);
 static looker_exit_t payload_process(void);
-static looker_exit_t var_update_master(void);
-static looker_exit_t var_update_slave(void);
+static looker_exit_t slave_status_get(void);
+static looker_exit_t slave_var_get(void);
+static looker_exit_t slave_var_reg(void);
+static looker_exit_t slave_var_set(void);
 
 looker_slave_state_t looker_slave_state(void)
 {
@@ -113,7 +112,111 @@ static void master_state_change(master_state_t state)
     }
 }
 
-static looker_exit_t var_register(void)
+static looker_exit_t slave_status_get(void)
+{
+    size_t j;
+    unsigned char ack;
+    looker_exit_t err;
+
+    msg_begin(&msg, COMMAND_STATUS_GET);
+    do
+    {
+        msg_send(&msg);
+        if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
+            return err;
+    } while (ack != ACK_SUCCESS);
+
+    //wait for status
+    for (j=0; j<ACK_TIMEOUT; j++)
+    {
+        looker_delay_1ms();
+        if (looker_data_available())
+        {
+            if (msg_get(&msg) != LOOKER_EXIT_SUCCESS)
+            {
+                ack_send(&msg, ACK_FAILURE);
+                j = 0;
+            }
+        }
+        if (msg_complete(&msg))
+            break;
+    }
+
+    //timeout
+    if (j >= ACK_TIMEOUT)
+    {
+        PRINTLN2("  ack_wait: timeout: ", j);
+        return LOOKER_EXIT_TIMEOUT;
+    }
+#ifdef DEBUG_MSG_ACK_WAIT
+    else
+        PRINTLN2("  ack_wait: ", j);
+#endif //DEBUG_MSG_ACK_WAIT
+
+    if ((err = payload_process()) != LOOKER_EXIT_SUCCESS)
+        return err;
+
+    if (msg.payload[0] != RESPONSE_STATUS)
+        return LOOKER_EXIT_BAD_RESPONSE;
+
+    return LOOKER_EXIT_SUCCESS;
+}
+
+static looker_exit_t slave_var_get(void)
+{
+    size_t j;
+    unsigned char ack;
+    looker_exit_t err;
+
+    msg_begin(&msg, COMMAND_VALUE_GET);
+    do
+    {
+        msg_send(&msg);
+        if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
+            return err;
+    } while (ack != ACK_SUCCESS);
+
+    do
+    {
+        //wait for values
+        for (j=0; j<ACK_TIMEOUT; j++)
+        {
+            looker_delay_1ms();
+            if (looker_data_available())
+            {
+                if (msg_get(&msg) != LOOKER_EXIT_SUCCESS)
+                {
+                    ack_send(&msg, ACK_FAILURE);
+                    j = 0;
+                }
+            }
+            if (msg_complete(&msg))
+                break;
+        }
+
+        //timeout
+        if (j >= ACK_TIMEOUT)
+        {
+            PRINTLN2("  ack_wait: timeout: ", j);
+            return LOOKER_EXIT_TIMEOUT;
+        }
+#ifdef DEBUG_MSG_ACK_WAIT
+        else
+        PRINTLN2("  ack_wait: ", j);
+#endif //DEBUG_MSG_ACK_WAIT
+
+        if ((err = payload_process()) != LOOKER_EXIT_SUCCESS)
+            return err;
+
+    } while (msg.payload[0] == RESPONSE_VALUE);
+
+    if (msg.payload[0] != RESPONSE_VALUE_LAST)
+        return LOOKER_EXIT_BAD_RESPONSE;
+
+    return LOOKER_EXIT_SUCCESS;
+}
+
+static looker_exit_t slave_var_reg(void)
 {
     unsigned char ack;
     looker_exit_t err;
@@ -121,14 +224,11 @@ static looker_exit_t var_register(void)
     while (var_cnt > var_reg_cnt)
     {
         size_t i = var_reg_cnt;
-        msg_begin(COMMAND_REGISTER);
-        msg.payload[msg.payload_size++] = i;
+        msg_begin(&msg, COMMAND_VAR_REG);
 
+        msg.payload[msg.payload_size++] = i;
         msg.payload[msg.payload_size++] = var[i].size;
         msg.payload[msg.payload_size++] = var[i].type;
-
-        memcpy(&msg.payload[msg.payload_size], var[i].value_current, var[i].size);
-        msg.payload_size += var[i].size;
 
         //name can be NULL
         if (var[i].name)
@@ -141,29 +241,35 @@ static looker_exit_t var_register(void)
 
         msg.payload[msg.payload_size++] = var[i].label;
 
-        //style can be NULL
-        if (var[i].style_current)
-        {
-            memcpy(&msg.payload[msg.payload_size], var[i].style_current, strlen(var[i].style_current)+1);
-            msg.payload_size += strlen(var[i].style_current)+1;
-        }
-        else
-            msg.payload[msg.payload_size++] = 0;
-
         do {
-            msg_send();
+            msg_send(&msg);
             
             if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
                 return err;
 
         } while (ack != ACK_SUCCESS);
 
+        //reset value_old
+        //value will be transferred during update (unless it is zero)
+        if (var[i].type == LOOKER_TYPE_STRING)
+            var[i].value_old[0] = 0;
+        else
+            memset(var[i].value_old, 0, var[i].size);
+
+        //style will be transferred during update (unless it is zero)
+#if LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED
+        if (var[i].style_current)
+            var[i].style_update = UPDATED_FROM_MASTER;
+#elif LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE
+        //reset style_old
+        var[i].style_old = NULL;
+#endif //LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED
         var_reg_cnt++;
     }
     return LOOKER_EXIT_SUCCESS;
 }
 
-static looker_exit_t var_update_slave(void)
+static looker_exit_t slave_var_set(void)
 {
     size_t i;
     unsigned char ack;
@@ -176,7 +282,7 @@ static looker_exit_t var_update_slave(void)
         {
             var[i].value_update = UPDATED_FROM_MASTER;
 
-            msg_begin(COMMAND_UPDATE_VALUE);
+            msg_begin(&msg, COMMAND_VALUE_SET);
             msg.payload[msg.payload_size++] = i;
 
             memcpy(&msg.payload[msg.payload_size], var[i].value_current, var[i].size);
@@ -184,7 +290,7 @@ static looker_exit_t var_update_slave(void)
 
             do
             {
-                msg_send();
+                msg_send(&msg);
                 if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
                     return err;
             } while (ack != ACK_SUCCESS);
@@ -193,56 +299,63 @@ static looker_exit_t var_update_slave(void)
             var[i].value_update = NOT_UPDATED;
 
         //style
-#ifdef LOOKER_STYLE_DYNAMIC
-        if (var[i].style_current)
+#if LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE
+        if ((var[i].style_current) && (*var[i].style_current))
         {
-            if (strcmp(var[i].style_current, var[i].style_old) != 0)
+            if (*var[i].style_current != var[i].style_old)
                 var[i].style_update = UPDATED_FROM_MASTER;
             else
                 var[i].style_update = NOT_UPDATED;
         }
-        else
-        if (var[i].style_old[0])
+        else if (var[i].style_old)
             var[i].style_update = UPDATED_FROM_MASTER;
         else
             var[i].style_update = NOT_UPDATED;
+#endif //LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE
 
-        if (var[i].style_update)
+#if ((LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE))
+        if (var[i].style_update != NOT_UPDATED)
         {
-            msg_begin(COMMAND_UPDATE_STYLE);
+            msg_begin(&msg, COMMAND_STYLE_SET);
             msg.payload[msg.payload_size++] = i;
 
+#if LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED
             if (var[i].style_current)
             {
                 strcpy((char *) &msg.payload[msg.payload_size], var[i].style_current);
-                msg.payload_size += strlen(var[i].style_current);
+//todo: double check this + 1
+                msg.payload_size += (strlen(var[i].style_current) + 1);
             }
+#else
+            if ((var[i].style_current) && (*var[i].style_current))
+            {
+                strcpy((char *) &msg.payload[msg.payload_size], *var[i].style_current);
+//todo: double check this + 1
+                msg.payload_size += (strlen(*var[i].style_current) + 1);
+            }
+#endif //LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED
             else
                 msg.payload[msg.payload_size++] = 0;
 
             do
             {
-                msg_send();
+                msg_send(&msg);
                 if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
                     return err;
             } while (ack != ACK_SUCCESS);
         }
-#endif //LOOKER_STYLE_DYNAMIC
-
+#endif //((LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE))
     }
     return LOOKER_EXIT_SUCCESS;
 }
 
 void looker_init(void)
 {
-    //free memory
-    looker_destroy();
-
     //reset master
     var_cnt = 0;
     var_reg_cnt = 0;
 
-    //reset slave vars through COMMAND_RESET to slave
+    //this will also reset slave vars through COMMAND_RESET
     master_state_change(MASTER_STATE_RESET);
 }
 
@@ -250,14 +363,7 @@ looker_exit_t looker_connect(const char *ssid, const char *pass, const char *dom
 {
     looker_exit_t err;
 
-#ifdef LOOKER_SANITY_TEST
-    if ((LOOKER_VAR_COUNT_MAX > LOOKER_WIFI_VAR_COUNT_MAX) ||
-        (LOOKER_VAR_NAME_SIZE > LOOKER_WIFI_VAR_NAME_SIZE) ||
-        (LOOKER_VAR_VALUE_SIZE > LOOKER_WIFI_VAR_VALUE_SIZE) ||
-        (LOOKER_VAR_STYLE_SIZE > LOOKER_WIFI_VAR_STYLE_SIZE))
-        return LOOKER_EXIT_NO_MEMORY;
-#endif //LOOKER_SANITY_TEST
-
+    looker_destroy();
     looker_init();
 
     if (ssid)
@@ -279,43 +385,45 @@ looker_exit_t looker_connect(const char *ssid, const char *pass, const char *dom
             return err;
     }
 
-    disconnect = 1;
-    connect = 1;
+    network = LOOKER_NETWORK_RECONNECT;
 
     return LOOKER_EXIT_SUCCESS;
 }
 
 void looker_disconnect(void)
 {
-    connect = 0;
-    disconnect = 1;
+    network = LOOKER_NETWORK_STAY_DISCONNECTED;
 }
 
-looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, STYLE_TYPE style)
+looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, looker_style_t style)
 {
     if ((type == LOOKER_TYPE_STRING) && (label != LOOKER_LABEL_SSID) & (label != LOOKER_LABEL_PASS) && (label != LOOKER_LABEL_DOMAIN))
         size = strlen((const char *) addr) + 1;
 
-#ifdef LOOKER_SANITY_TEST
-    if (var_cnt >= LOOKER_VAR_COUNT_MAX)
+#ifdef LOOKER_MASTER_SANITY_TEST
+    if (var_cnt >= LOOKER_MASTER_VAR_COUNT)
         return LOOKER_EXIT_NO_MEMORY;
 
     if (type >= LOOKER_TYPE_LAST)
         return LOOKER_EXIT_BAD_PARAMETER;
 
-    if (size > LOOKER_VAR_VALUE_SIZE)
+    if (size > LOOKER_MASTER_VAR_VALUE_SIZE)
         return LOOKER_EXIT_BAD_PARAMETER;
 
     if ((type >= LOOKER_TYPE_FLOAT_0) && (type <= LOOKER_TYPE_FLOAT_4) && (size != sizeof(float)) && (size != sizeof(double)))
         return LOOKER_EXIT_BAD_PARAMETER;
 
-    if (name && (strlen(name) + 1 > LOOKER_VAR_NAME_SIZE))
+    if (name && (strlen(name) + 1 > LOOKER_MASTER_VAR_NAME_SIZE))
         return LOOKER_EXIT_BAD_PARAMETER;
 
     if (label >= LOOKER_LABEL_LAST)
         return LOOKER_EXIT_BAD_PARAMETER;
 
-    if (style && (strlen(style) + 1 > LOOKER_WIFI_VAR_STYLE_SIZE))
+#if LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE
+    if (style && *style &&(strlen(*style) + 1 > LOOKER_VAR_STYLE_SIZE))
+#else
+    if (style &&(strlen(style) + 1 > LOOKER_VAR_STYLE_SIZE))
+#endif //LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE
         return LOOKER_EXIT_BAD_PARAMETER;
 
     size_t i;
@@ -337,10 +445,9 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
             if ((var[i].name) && (!strcmp(var[i].name, name)))
                 return LOOKER_EXIT_BAD_PARAMETER;
     }
+#endif //LOOKER_MASTER_SANITY_TEST
 
-#endif //LOOKER_SANITY_TEST
-
-#ifdef LOOKER_USE_MALLOC
+#ifdef LOOKER_MASTER_USE_MALLOC
     var_t *p;
     if ((p = (var_t *) realloc(var, (size_t) ((var_cnt + 1) * sizeof(var_t)))) == NULL)
     {
@@ -348,20 +455,15 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
         return LOOKER_EXIT_NO_MEMORY;
     }
     var = p;
-#endif //LOOKER_USE_MALLOC
+#endif //LOOKER_MASTER_USE_MALLOC
 
     var[var_cnt].value_current = (void *) addr;
-    memcpy(var[var_cnt].value_old, (const void *) addr, size);
     var[var_cnt].size = size;
     var[var_cnt].type = type;
     var[var_cnt].label = label;
+#if ((LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE))
     var[var_cnt].style_current = style;
-#ifdef LOOKER_STYLE_DYNAMIC
-    if (style)
-        strcpy(var[var_cnt].style_old, style);
-    else
-        var[var_cnt].style_old[0] = 0;
-#endif //LOOKER_STYLE_DYNAMIC
+#endif //((LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE))
     var[var_cnt].name = name;
     var_cnt++;
 
@@ -380,51 +482,47 @@ looker_exit_t looker_update(void)
             j = 0;
             while (++j < RESET_POSTPOND)
                 looker_delay_1ms();
-            for (i=0; i<var_cnt; i++)
-            {
-                var[i].value_update = NOT_UPDATED;
-#ifdef LOOKER_STYLE_DYNAMIC
-                var[i].style_update = NOT_UPDATED;
-#endif //LOOKER_STYLE_DYNAMIC
-            }
-            var_reg_cnt = 0;
-            msg.pos = POS_PREFIX;
-            slave_state = LOOKER_SLAVE_STATE_UNKNOWN;
-            msg_begin(COMMAND_RESET);
-            msg_send();
+            msg_begin(&msg, COMMAND_RESET);
+            msg_send(&msg);
             master_state_change(MASTER_STATE_RESET_ACK);
         break;
 
         case MASTER_STATE_RESET_ACK:
-            if (looker_data_available())
+            if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
             {
-                if (ack_get() == ACK_SUCCESS)
-                {
-                    //get status from slave
-                    if ((err = var_update_master()) != LOOKER_EXIT_SUCCESS)
-                    {
-                        master_state_change(MASTER_STATE_RESET);
-                        return err;
-                    }
-                    else
-                        master_state_change(MASTER_STATE_SYNC);
-                }
-                else
+                master_state_change(MASTER_STATE_RESET);
+                return err;
+            }
+
+            if (ack_get() == ACK_SUCCESS)
+            {
+                //get slave status to make sure slave is synced up
+                if ((err = slave_status_get()) != LOOKER_EXIT_SUCCESS)
                 {
                     master_state_change(MASTER_STATE_RESET);
-                    return LOOKER_EXIT_ACK_FAILURE;
+                    return err;
                 }
+                //reset variables here
+                var_reg_cnt = 0;
+                master_state_change(MASTER_STATE_SYNC);
             }
             else
             {
                 master_state_change(MASTER_STATE_RESET);
-                return LOOKER_EXIT_NO_DATA;
+                return LOOKER_EXIT_ACK_FAILURE;
             }
         //no break
 
         case MASTER_STATE_SYNC:
-            //register slave
-            if ((err = var_register()) != LOOKER_EXIT_SUCCESS)
+            //reg vars
+            if ((err = slave_var_reg()) != LOOKER_EXIT_SUCCESS)
+            {
+                master_state_change(MASTER_STATE_RESET);
+                return err;
+            }
+
+            //get slave status
+            if ((err = slave_status_get()) != LOOKER_EXIT_SUCCESS)
             {
                 master_state_change(MASTER_STATE_RESET);
                 return err;
@@ -434,87 +532,190 @@ looker_exit_t looker_update(void)
             if (slave_state == LOOKER_SLAVE_STATE_CONNECTED)
             {
                 //update slave
-                if ((err = var_update_slave()) != LOOKER_EXIT_SUCCESS)
+                if ((err = slave_var_set()) != LOOKER_EXIT_SUCCESS)
                 {
                     master_state_change(MASTER_STATE_RESET);
                     return err;
                 }
-            }
 
-            //update master
-            if ((err = var_update_master()) != LOOKER_EXIT_SUCCESS)
-            {
-                master_state_change(MASTER_STATE_RESET);
-                return err;
-            }
+                //update master
+                if ((err = slave_var_get()) != LOOKER_EXIT_SUCCESS)
+                {
+                    master_state_change(MASTER_STATE_RESET);
+                    return err;
+                }
 
-            //only if slave is connected
-            if (slave_state == LOOKER_SLAVE_STATE_CONNECTED)
-            {
                 //validate
                 for (i=0; i<var_cnt; i++)
                 {
                     //value
                     if (var[i].value_update == UPDATED_FROM_MASTER)
                     {
-                        PRINTF("Update from master MMMMMMM\n");
+                        PRINT("Update from master MMMMMMM\n");
                         memcpy(var[i].value_old, (const void *) var[i].value_current, var[i].size);
                     }
                     else if (var[i].value_update == UPDATED_FROM_SLAVE)
                     {
-                        PRINTF("Update from slave SSSSSSS\n");
+                        PRINT("Update from slave SSSSSSS\n");
                         memcpy(var[i].value_current, var[i].value_slave, var[i].size);
                         memcpy(var[i].value_old, var[i].value_slave, var[i].size);
                     }
 
                     //style
-#ifdef LOOKER_STYLE_DYNAMIC
                     if (var[i].style_update == UPDATED_FROM_MASTER)
                     {
-                        if (var[i].style_current)
-                            strcpy(var[i].style_old, var[i].style_current);
-                        else
-                            var[i].style_old[0] = 0;
+#if LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE
+                            var[i].style_old = *var[i].style_current;
+#endif //LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE
+                        var[i].style_update = NOT_UPDATED;
                     }
-#endif //LOOKER_STYLE_DYNAMIC
                 }
             }
 
-            //disconnect
-            if (disconnect)
-            {
-                msg_begin(COMMAND_DISCONNECT);
-                do
-                {
-                    msg_send();
-                    if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
-                    {
-                        master_state_change(MASTER_STATE_RESET);
-                        return err;
-                    }
-                } while (ack != ACK_SUCCESS);
-                disconnect = 0;
-            }
+#ifdef DEBUG_CONNECTION
+            PRINT("  network: ");
+            switch (network) {
+                case LOOKER_NETWORK_DO_NOTHING:
+                    PRINT("LOOKER_NETWORK_DO_NOTHING\n");
+                break;
 
-            //connect
-            if ((connect) && (slave_state == LOOKER_SLAVE_STATE_DISCONNECTED))
-            {
-                msg_begin(COMMAND_CONNECT);
-                do
-                {
-                    msg_send();
-                    if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
-                    {
-                        master_state_change(MASTER_STATE_RESET);
-                        return err;
+                case LOOKER_NETWORK_STAY_CONNECTED:
+                    PRINT("LOOKER_NETWORK_STAY_CONNECTED\n");
+                break;
+
+                case LOOKER_NETWORK_STAY_DISCONNECTED:
+                    PRINT("LOOKER_NETWORK_STAY_DISCONNECTED\n");
+                break;
+
+                case LOOKER_NETWORK_RECONNECT:
+                    PRINT("LOOKER_NETWORK_RECONNECT\n");
+                break;
+
+                case LOOKER_NETWORK_RECONNECT_2:
+                    PRINT("LOOKER_NETWORK_RECONNECT_2\n");
+                break;
+                default:
+                break;
+            }
+#endif //DEBUG_CONNECTION
+
+//todo: move to slave
+            switch (network) {
+                case LOOKER_NETWORK_DO_NOTHING:
+                break;
+
+                case LOOKER_NETWORK_STAY_CONNECTED:
+                    switch (slave_state) {
+                        case LOOKER_SLAVE_STATE_CONNECTING:
+                            //timeout
+                        break;
+                        case LOOKER_SLAVE_STATE_CONNECTED:
+                            //task complete
+                        break;
+                        case LOOKER_SLAVE_STATE_DISCONNECTING:
+                        case LOOKER_SLAVE_STATE_DISCONNECTED:
+                            msg_begin(&msg, COMMAND_CONNECT);
+                            do
+                            {
+                                msg_send(&msg);
+                                if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
+                                {
+                                    master_state_change(MASTER_STATE_RESET);
+                                    return err;
+                                }
+                            } while (ack != ACK_SUCCESS);
+                        break;
+                        default:
+                        break;
                     }
-                } while (ack != ACK_SUCCESS);
-                connect = 0;
+                break;
+
+                case LOOKER_NETWORK_STAY_DISCONNECTED:
+                    switch (slave_state) {
+                        case LOOKER_SLAVE_STATE_CONNECTING:
+                        case LOOKER_SLAVE_STATE_CONNECTED:
+                            msg_begin(&msg, COMMAND_DISCONNECT);
+                            do
+                            {
+                                msg_send(&msg);
+                                if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
+                                {
+                                    master_state_change(MASTER_STATE_RESET);
+                                    return err;
+                                }
+                            } while (ack != ACK_SUCCESS);
+                        break;
+                        case LOOKER_SLAVE_STATE_DISCONNECTING:
+                            //timeout
+                        break;
+                        case LOOKER_SLAVE_STATE_DISCONNECTED:
+                            //task complete
+                        break;
+                        default:
+                        break;
+                    }
+                break;
+
+                case LOOKER_NETWORK_RECONNECT:
+                    switch (slave_state) {
+                        case LOOKER_SLAVE_STATE_CONNECTING:
+                        case LOOKER_SLAVE_STATE_CONNECTED:
+                            msg_begin(&msg, COMMAND_DISCONNECT);
+                            do
+                            {
+                                msg_send(&msg);
+                                if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
+                                {
+                                    master_state_change(MASTER_STATE_RESET);
+                                    return err;
+                                }
+                            } while (ack != ACK_SUCCESS);
+                        break;
+                        case LOOKER_SLAVE_STATE_DISCONNECTING:
+                            //timeout
+                        break;
+                        case LOOKER_SLAVE_STATE_DISCONNECTED:
+                            network = LOOKER_NETWORK_RECONNECT_2;
+                        break;
+                        default:
+                        break;
+                    }
+                break;
+
+                case LOOKER_NETWORK_RECONNECT_2:
+                    switch (slave_state) {
+                        case LOOKER_SLAVE_STATE_CONNECTING:
+                            //timeout
+                        break;
+                        case LOOKER_SLAVE_STATE_CONNECTED:
+                            network = LOOKER_NETWORK_STAY_CONNECTED;
+                        break;
+                        case LOOKER_SLAVE_STATE_DISCONNECTING:
+                            network = LOOKER_NETWORK_RECONNECT;
+                        break;
+                        case LOOKER_SLAVE_STATE_DISCONNECTED:
+                            msg_begin(&msg, COMMAND_CONNECT);
+                            do
+                            {
+                                msg_send(&msg);
+                                if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
+                                {
+                                    master_state_change(MASTER_STATE_RESET);
+                                    return err;
+                                }
+                            } while (ack != ACK_SUCCESS);
+                        break;
+                        default:
+                        break;
+                    }
+                break;
+                default:
+                break;
             }
         break;
 
         default:
-            PRINTF1("Error: looker_update: bad master state: %u\n", master_state);
+            PRINTLN2("Error: looker_update: bad master state: ", master_state);
             master_state_change(MASTER_STATE_RESET);
             return LOOKER_EXIT_BAD_STATE;
         break;
@@ -522,96 +723,59 @@ looker_exit_t looker_update(void)
     return LOOKER_EXIT_SUCCESS;
 }
 
-static looker_exit_t var_update_master(void)
-{
-    size_t j;
-    unsigned char ack;
-    looker_exit_t err;
-
-    msg_begin(COMMAND_UPDATE_GET);
-    do
-    {
-        msg_send();
-        if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
-            return err;
-    } while (ack != ACK_SUCCESS);
-
-    do
-    {
-        //wait for update
-        for (j=0; j<ACK_TIMEOUT; j++)
-        {
-            looker_delay_1ms();
-            if (looker_data_available())
-            {
-                if (msg_get() != LOOKER_EXIT_SUCCESS)
-                {
-                    ack_send(ACK_FAILURE);
-                    j = 0;
-                }
-            }
-            if (msg_complete())
-                break;
-        }
-
-        //timeout
-        if (j >= ACK_TIMEOUT)
-        {
-            PRINTF1("timeout: %lu\n", j);
-            return LOOKER_EXIT_TIMEOUT;
-        }
-        else
-            PRINTF1("time: %lu\n", j);
-
-        if ((err = payload_process()) != LOOKER_EXIT_SUCCESS)
-            return err;
-
-    } while (msg.payload[0] == COMMAND_UPDATE_VALUE);
-
-    if (msg.payload[0] != COMMAND_STATUS)
-        return LOOKER_EXIT_BAD_COMMAND;
-
-    return LOOKER_EXIT_SUCCESS;
-}
-
 static looker_exit_t payload_process(void)
 {
     switch ((unsigned char) msg.payload[0]) {
-        case COMMAND_UPDATE_VALUE:
-            PRINTF("<-UPDATE_VALUE -----------\n");
+        case RESPONSE_VALUE:
+            PRINT("<-RESPONSE_VALUE -----------\n");
             var[msg.payload[1]].value_update = UPDATED_FROM_SLAVE;
             memcpy(var[msg.payload[1]].value_slave, &msg.payload[2], var[msg.payload[1]].size);
-            ack_send(ACK_SUCCESS);
+            ack_send(&msg, ACK_SUCCESS);
         break;
 
-        case COMMAND_STATUS:
-            PRINTF("<-STATUS\n");
-            slave_state = msg.payload[1];
-#ifdef DEBUG
-            PRINTF("  slave_state: ");
+        case RESPONSE_VALUE_LAST:
+            PRINT("<-RESPONSE_VALUE_LAST\n");
+            ack_send(&msg, ACK_SUCCESS);
+        break;
+
+        case RESPONSE_STATUS:
+            PRINT("<-RESPONSE_STATUS\n");
+            if (msg.payload[1])
+            {
+                PRINT("Slave rebooted !!!\n");
+                master_state_change(MASTER_STATE_RESET);
+            }
+            slave_state = msg.payload[2];
+#ifdef DEBUG_SLAVE_STATUS
+            PRINT("  slave_state: ");
             switch (slave_state) {
                 case LOOKER_SLAVE_STATE_UNKNOWN:
-                    PRINTF("UNKNOWN\n");
+                    PRINT("LOOKER_SLAVE_STATE_UNKNOWN\n");
+                break;
+                case LOOKER_SLAVE_STATE_DISCONNECTING:
+                    PRINT("LOOKER_SLAVE_STATE_DISCONNECTING\n");
                 break;
                 case LOOKER_SLAVE_STATE_DISCONNECTED:
-                    PRINTF("DISCONNECTED\n");
+                    PRINT("LOOKER_SLAVE_STATE_DISCONNECTED\n");
                 break;
                 case LOOKER_SLAVE_STATE_CONNECTING:
-                    PRINTF("CONNECTING\n");
+                    PRINT("LOOKER_SLAVE_STATE_CONNECTING\n");
                 break;
                 case LOOKER_SLAVE_STATE_CONNECTED:
-                    PRINTF("CONNECTED\n");
+                    PRINT("LOOKER_SLAVE_STATE_CONNECTED\n");
                 break;
                 default:
+                    PRINT("UNDEFINED !!!\n");
                 break;
             }
-#endif //DEBUG
-            ack_send(ACK_SUCCESS);
+#endif //DEBUG_SLAVE_STATUS
+
+            ack_send(&msg, ACK_SUCCESS);
         break;
 
         default:
-            PRINTF1("Error: payload_process: bad command: %u\n", (unsigned char) msg.payload[0]);
-            ack_send(ACK_FAILURE);
+            PRINTLN2("Error: payload_process: bad command: ", (unsigned char) msg.payload[0]);
+            ack_send(&msg, ACK_FAILURE);
             return LOOKER_EXIT_BAD_COMMAND;
         break;
     }
@@ -620,14 +784,12 @@ static looker_exit_t payload_process(void)
 
 void looker_destroy(void)
 {
-    var_cnt = 0;
-    var_reg_cnt = 0;
-#ifdef LOOKER_USE_MALLOC
+#ifdef LOOKER_MASTER_USE_MALLOC
     if (var)
     {
         free(var);
         var = NULL;
     }
-#endif //LOOKER_USE_MALLOC
+#endif //LOOKER_MASTER_USE_MALLOC
 }
 

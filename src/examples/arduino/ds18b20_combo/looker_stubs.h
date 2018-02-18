@@ -1,23 +1,27 @@
 #ifndef LOOKER_STUBS_H
 #define LOOKER_STUBS_H
 
-#ifndef LOOKER_STUBS_C
-    #define EXTERN extern
-#else
+#ifdef LOOKER_STUBS_C
     #define EXTERN
+#else
+    #define EXTERN extern
 #endif //LOOKER_STUBS_C
 
 //debug
 //#define DEBUG
 
 #ifdef DEBUG
-    #define PRINTF(a) mySerial.print(a)
-    #define PRINTF1(a,b) mySerial.print(a); mySerial.println(b)
-    #define PRINTF2(a,b,c)
+    #define DEBUG_MSG_DECODE
+    #define DEBUG_MSG_ACK
+    #define DEBUG_MSG_ACK_WAIT
+
+    EXTERN void debug_print(const char *s);
+    EXTERN void debug_println2(const char *s, int i);
+    #define PRINT(s) debug_print(s)
+    #define PRINTLN2(s,i) debug_println2(s,i)
 #else
-    #define PRINTF(a)
-    #define PRINTF1(a,b)
-    #define PRINTF2(a,b,c)
+    #define PRINT(s)
+    #define PRINTLN2(s,i)
 #endif //DEBUG
 
 //prototypes

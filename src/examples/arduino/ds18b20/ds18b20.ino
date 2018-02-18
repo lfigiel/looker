@@ -1,9 +1,8 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include "looker_master.h"
-#include "wifi.h"
 #include "looker_stubs.h"
-#include "looker_stubs/looker_stubs.c"
+#include "wifi.h"
 
 #define LOOKER_DOMAIN "arduino"
 
@@ -17,7 +16,6 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
 void setup() {
-    delay(500);
     sensors.begin();
     serial_init();
 

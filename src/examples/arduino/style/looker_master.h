@@ -6,74 +6,26 @@ Copyright (c) 2018 Lukasz Figiel
 extern "C" {
 #endif //__cplusplus
 
-#define LOOKER_USE_MALLOC
-#define LOOKER_VAR_COUNT_MAX 16
-#define LOOKER_VAR_NAME_SIZE 64
-#define LOOKER_VAR_VALUE_SIZE 16
-#define LOOKER_VAR_STYLE_SIZE 32
-#define LOOKER_SANITY_TEST
-//#define LOOKER_STYLE_DYNAMIC
+#include "looker_common.h"
 
-typedef enum {
-    LOOKER_TYPE_INT,
-    LOOKER_TYPE_UINT,
-    LOOKER_TYPE_FLOAT_0,
-    LOOKER_TYPE_FLOAT_1,
-    LOOKER_TYPE_FLOAT_2,
-    LOOKER_TYPE_FLOAT_3,
-    LOOKER_TYPE_FLOAT_4,
-    LOOKER_TYPE_STRING,
+#define LOOKER_MASTER_USE_MALLOC
+#define LOOKER_MASTER_VAR_COUNT 16
+#define LOOKER_MASTER_VAR_NAME_SIZE (LOOKER_MSG_PAYLOAD_SIZE - 5) //command, var_index, var_size, var_type, var_label
+#define LOOKER_MASTER_VAR_VALUE_SIZE 16
+#define LOOKER_MASTER_STYLE LOOKER_STYLE_VARIABLE
+#define LOOKER_MASTER_SANITY_TEST
 
-    LOOKER_TYPE_LAST
-} looker_type_t;
-
-typedef enum {
-    LOOKER_LABEL_SSID,
-    LOOKER_LABEL_PASS,
-    LOOKER_LABEL_DOMAIN,
-    LOOKER_LABEL_CHECKBOX,
-    LOOKER_LABEL_CHECKBOX_INV,
-    LOOKER_LABEL_VIEW,
-    LOOKER_LABEL_EDIT,
-
-    LOOKER_LABEL_LAST
-} looker_label_t;
-
-typedef enum {
-    LOOKER_EXIT_SUCCESS,
-    LOOKER_EXIT_NO_MEMORY,
-    LOOKER_EXIT_BAD_PARAMETER,
-    LOOKER_EXIT_BAD_COMMAND,
-    LOOKER_EXIT_BAD_STATE,
-    LOOKER_EXIT_TIMEOUT,
-    LOOKER_EXIT_ACK_FAILURE,
-    LOOKER_EXIT_NO_DATA,
-
-    LOOKER_EXIT_LAST
-} looker_exit_t;
-
-typedef enum {
-    LOOKER_SLAVE_STATE_UNKNOWN,
-    LOOKER_SLAVE_STATE_DISCONNECTED,
-    LOOKER_SLAVE_STATE_CONNECTING,
-    LOOKER_SLAVE_STATE_CONNECTED,
-
-    LOOKER_SLAVE_STATE_LAST
-} looker_slave_state_t;
-
-#define LOOKER_VAR_FLOAT LOOKER_VAR_FLOAT_1
-
-#ifdef LOOKER_STYLE_DYNAMIC
-    #define STYLE_TYPE char *
+#if LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE
+    #define looker_style_t const char **
 #else
-    #define STYLE_TYPE const char *
-#endif //LOOKER_STYLE_DYNAMIC
+    #define looker_style_t const char *
+#endif //LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE
 
 //prototypes
 void looker_init(void);
 looker_exit_t looker_connect(const char *ssid, const char *pass, const char *domain);
 void looker_disconnect(void);
-looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, STYLE_TYPE style);
+looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, looker_style_t style);
 looker_exit_t looker_update(void);
 void looker_destroy(void);
 looker_slave_state_t looker_slave_state(void);

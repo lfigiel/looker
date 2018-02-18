@@ -33,20 +33,17 @@ Looker is released under **[MIT](LICENSE)** open source license.
 
 ```C
 #include "looker_master.h"
-#include "wifi.h"
 #include "looker_stubs.h"
-#include "looker_stubs/looker_stubs.c"
+#include "wifi.h"
 
 #define LOOKER_DOMAIN "arduino"
 
-//globals
 volatile unsigned int adc;
 volatile unsigned char led = 0;
 
 void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, 1);
-    delay(500);
     serial_init();
 
     looker_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
@@ -59,7 +56,6 @@ void loop() {
     digitalWrite(LED_BUILTIN, led);
     looker_update();
 }
-
 ```
 ### The device is now accessible at address: http://arduino.local
 ![alt text](src/examples/arduino/helloWorld/helloWorld.png)
@@ -110,9 +106,10 @@ Registers the variable making it accessible from the website.
 
 **name**  
 variable will be showed under this name on the website. The name does not need to be the same as the C variable.
-Max size of this name (string) is limited in *looker.h*:
+Max size of this name (string) is limited in *looker_master.h* and *looker_slave.h*:
 ```C
-#define LOOKER_VAR_NAME_SIZE 32
+#define LOOKER_MASTER_VAR_NAME_SIZE 16
+#define LOOKER_SLAVE_VAR_NAME_SIZE 16
 ```
 **addr**  
 address of the variable
@@ -148,9 +145,10 @@ default number is defined in *looker.h*:
 
 The above apply to both float and double.  
 All variables except string can have size of up to 8 bytes (64-bit).
-Maximum size – including string is limited in *looker.h*:
+Maximum size – including string is limited in *looker_master.h* and *looker_slave.h*:
 ```C
-#define LOOKER_VAR_VALUE_SIZE 16
+#define LOOKER_MASTER_VAR_VALUE_SIZE 16
+#define LOOKER_SLAVE_VAR_VALUE_SIZE 16
 ```
 **label**  
 specifies how the variable is presented on the website. Following variants are supported:  
@@ -174,15 +172,23 @@ Example:
 ```C
 #define STYLE "color:red;"	//red text
 ```
-Style can be static or dynamic.
-Unlike static dynamic style can change on fly but requires more RAM.
-Dynamic style is useful for example if its value reaches some critical level and user should be alerted.
+Style can be disabled, fixed or variable:
+*LOOKER_STYLE_DISABLED*
+no CSS is used
 
-To leave static style this line in *looker.h* needs to be commented out:
+*LOOKER_STYLE_FIXED*
+style is fixed and cannot be changed
+
+*LOOKER_STYLE_VARIABLE*
+style can be changed on fly but this requires more RAM.
+
+This selects the style for master (*looker_master.h*) and slave (*looker_slave.h*)
 ```C
-#define LOOKER_STYLE_DYNAMIC
+#define LOOKER_MASTER_STYLE LOOKER_STYLE_VARIABLE
+#define LOOKER_SLAVE_STYLE LOOKER_STYLE_VARIABLE
 ```
-Max size of style (string) is limited in *looker.h*:
+
+Max size of style (string) is limited in *looker_common.h*:
 ```C
 #define LOOKER_VAR_STYLE_SIZE 48
 ```
@@ -202,16 +208,18 @@ The more frequent it is called the more often the variables get updated.
 
 
 ## Fine-tuning
-*looker.h* has some defines that help optimize Looker:
+*looker_common.h*, *looker_master.h* and *looker_slave.h* have some defines that help optimize Looker:
 ```C
-#define LOOKER_USE_MALLOC
+#define LOOKER_MASTER_USE_MALLOC
+#define LOOKER_SLAVE_USE_MALLOC
 ```
 Each variable needs a block of data that defines this variable.
 This data can be allocated statically or dynamically.
-If LOOKER_USE_MALLOC is commented out static data is preferred.
+If the line is commented out static data is preferred.
 
-LOOKER_VAR_COUNT (*looker.h*) limits number of block of data to be allocated but with static they are all used. Therefore this value should be equal to the number of variables intended to use otherwise extra RAM will be wasted. With dynamic data block is allocated per variable (still up to LOOKER_VAR_COUNT) so RAM is better utilized. The trade off is that malloc function itself takes some space specially if it is not used elsewhere and it gets linked specially for Looker. Also data for static variables are guaranteed at the compilation time whereas dynamic data only during run time. Depending on resources, other prior malloc usage it might be possible that there will not be enough memory for Looker to allocate. 
+LOOKER_MASTER_VAR_COUNT/LOOKER_SLAVE_VAR_COUNT limits number of block of data to be allocated but with static they are all used. Therefore this value should be equal to the number of variables intended to use otherwise extra RAM will be wasted. With dynamic data block is allocated per variable (still up to LOOKER_MASTER_VAR_COUNT/LOOKER_SLAVE_VAR_COUNT) so RAM is better utilized. The trade off is that malloc function itself takes some space specially if it is not used elsewhere and it gets linked specially for Looker. Also data for static variables are guaranteed at the compilation time whereas dynamic data only during run time. Depending on resources, other prior malloc usage it might be possible that there will not be enough memory for Looker to allocate. 
 ```C
-#define LOOKER_SANITY_TEST
+#define LOOKER_MASTER_SANITY_TEST
+#define LOOKER_SLAVE_SANITY_TEST
 ```
 This turns on a simple test that checks if a function parameter or a variable exceeds its range. This feature can be disabled to get smaller code footprint. 

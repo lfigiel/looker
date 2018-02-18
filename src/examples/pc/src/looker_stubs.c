@@ -120,3 +120,16 @@ int serial_init(const char *portname)
     return 0;
 }
 
+#ifdef DEBUG
+void debug_print(const char *s)
+{
+    printf("%s", s);
+}
+
+void debug_println2(const char *s, int i)
+{
+    printf("%s", s);
+    printf("%d\n", i);
+}
+#endif //DEBUG
+

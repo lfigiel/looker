@@ -45,8 +45,6 @@ int main(int argc, char *argv[])
     while (1) {
         looker_update();
         var2++;
-//        sleep(1);
-        usleep(500000);
     }
     looker_destroy();
 	return 0;

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include "stubs/looker_stubs.h"
+#include "looker_stubs.h"
 #include "looker_master.h"
 #include "wifi.h"
 
@@ -19,10 +19,10 @@ int main(int argc, char *argv[])
 //    unsigned long long u = 18000000000000000000LU;
     unsigned long long u = 18446744073709551615LU;
 
-	if (looker_reg("i", &i, sizeof(i), LOOKER_VAR_INT, LOOKER_HTML_EDIT, DEFAULT_STYLE))
+	if (looker_reg("i", &i, sizeof(i), LOOKER_TYPE_INT, LOOKER_LABEL_EDIT, DEFAULT_STYLE))
         printf("Error\n");
 
-	if (looker_reg("u", &u, sizeof(u), LOOKER_VAR_UINT, LOOKER_HTML_EDIT, DEFAULT_STYLE))
+	if (looker_reg("u", &u, sizeof(u), LOOKER_TYPE_UINT, LOOKER_LABEL_EDIT, DEFAULT_STYLE))
         printf("Error\n");
 
     while (1)

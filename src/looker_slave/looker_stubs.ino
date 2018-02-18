@@ -1,7 +1,20 @@
+#define LOOKER_STUBS_C
+#include "looker_stubs.h"
+
+#define BAUD_RATE 57600
+
 #ifdef DEBUG
 #include <SoftwareSerial.h>
-SoftwareSerial mySerial(SW_SERIAL_UNUSED_PIN, 4);  //RX, TX
+SoftwareSerial mySerial(SW_SERIAL_UNUSED_PIN, 4);  //RX, TX   TX is only used, 4 = D2 in NodeMcu
 #endif //DEBUG
+
+void serial_init(void)
+{
+    Serial.begin(57600);
+#ifdef DEBUG
+    mySerial.begin(57600);
+#endif //DEBUG
+}
 
 void looker_delay_1ms(void)
 {
@@ -39,13 +52,16 @@ void looker_send(void *buf, int size)
         delay(10);
     }
 }
-
-void serial_init(void)
-{
-    Serial.begin(57600);
 #ifdef DEBUG
-    mySerial.begin(57600);
-#endif //DEBUG
-
+void debug_print(const char *s)
+{
+    mySerial.print(s);
 }
+
+void debug_println2(const char *s, int i)
+{
+    mySerial.print(s);
+    mySerial.println(i);
+}
+#endif //DEBUG
 

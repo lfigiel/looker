@@ -5,23 +5,21 @@
 extern "C" {
 #endif //__cplusplus
 
-//#ifndef LOOKER_STUBS_C
-//    #define EXTERN extern
-//#else
+#ifdef LOOKER_STUBS_C
     #define EXTERN
-//#endif //LOOKER_STUBS_C
+#else
+    #define EXTERN extern
+#endif //LOOKER_STUBS_C
 
 //debug
 //#define DEBUG
 
 #ifdef DEBUG
-    #define PRINTF(a) Serial.print(a)
-    #define PRINTF1(a,b) Serial.print(a); Serial.println(b,DEC)
-    #define PRINTF2(a,b,c)
+    #define PRINT(s)
+    #define PRINTLN2(s,i)
 #else
-    #define PRINTF(a)
-    #define PRINTF1(a,b)
-    #define PRINTF2(a,b,c)
+    #define PRINT(s)
+    #define PRINTLN2(s,i)
 #endif //DEBUG
 
 //prototypes
@@ -33,6 +31,5 @@ EXTERN int serial_init(const char *portname);
 #ifdef __cplusplus
 }
 #endif //__cplusplus
-
 #endif //LOOKER_STUBS_H
 
