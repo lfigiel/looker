@@ -448,7 +448,8 @@ void print_html(void)
 
     if (ms_timeout >= 0)
     {
-        webString += "        <form><br>\n";
+        webString += "        <form method='post'>\n";
+        webString += "            <br>\n";
 
         for (int i=0; i<var_cnt; i++)
         {
@@ -613,15 +614,14 @@ void print_html(void)
         stat_print("MS Timeouts", stat_ms_timeouts, 1);
 #ifndef LOOKER_COMBO
         stat_print("MS ACK Failures", stat_ack_get_failures, 1);
+//todo: to be implemented
+//        stat_print("MS Msg Timeouts", stat_msg_timeouts, 1);
+        stat_print("MS Msg Prefix Errors", stat_msg_prefix_errors, 1);
+        stat_print("MS Msg Payload Errors", stat_msg_payload_errors, 1);
+        stat_print("MS Msg Checksum Errors", stat_msg_checksum_errors, 1);
         stat_print("SM ACK Failures", stat_ack_send_failures, 1);
 #endif //LOOKER_COMBO
         stat_print("SM Updates", stat_sm_updates, 0);
-#ifndef LOOKER_COMBO
-        stat_print("Msg Timeouts", stat_msg_timeouts, 1);
-        stat_print("Msg Prefix Errors", stat_msg_prefix_errors, 1);
-        stat_print("Msg Payload Errors", stat_msg_payload_errors, 1);
-        stat_print("Msg Checksum Errors", stat_msg_checksum_errors, 1);
-#endif //LOOKER_COMBO
     }
 
     webString += "    </body>\n";
