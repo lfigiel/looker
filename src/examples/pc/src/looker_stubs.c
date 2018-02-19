@@ -59,6 +59,7 @@ static int set_interface_attribs (int fd, int speed, int parity)
     tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
 
     tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
+    tty.c_iflag &= ~ICRNL;  //do not translate CR -> LF
 
     tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
                                         // enable reading
@@ -106,7 +107,6 @@ int serial_init(const char *portname)
 
     set_interface_attribs (fd, B57600, 0);  // set speed to 57600 bps, 8n1 (no parity)
     set_blocking (fd, 0);                // set no blocking
-
 
     //empty input buffer
 #ifdef EMPTY_INPUT_BUFFER

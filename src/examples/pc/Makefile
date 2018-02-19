@@ -4,10 +4,10 @@
 #TARGET = all
 #TARGET = var
 #TARGET = play
-#TARGET = stress
+TARGET = stress
 #TARGET = long
 #TARGET = float
-TARGET = style
+#TARGET = style
 
 PORT = /dev/ttyUSB0
 TARGET_DIR = src

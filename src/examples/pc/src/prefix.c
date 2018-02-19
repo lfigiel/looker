@@ -6,10 +6,13 @@
         return 1;
     }
 
-    serial_init(argv[1]);
+	if ((err = serial_init(argv[1])))
+    {
+        printf("Error: %d\n", err);
+        return 1;
+    }
 
     printf("looker init ... ");
-
 
 	if ((err = looker_connect(LOOKER_SSID, LOOKER_PASS, DOMAIN)))
     {

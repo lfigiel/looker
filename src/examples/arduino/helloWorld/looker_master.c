@@ -494,7 +494,7 @@ looker_exit_t looker_update(void)
                 return err;
             }
 
-            if (ack_get() == ACK_SUCCESS)
+            if (ack == ACK_SUCCESS)
             {
                 //get slave status to make sure slave is synced up
                 if ((err = slave_status_get()) != LOOKER_EXIT_SUCCESS)

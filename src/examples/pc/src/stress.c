@@ -84,8 +84,6 @@ int main(int argc, char *argv[])
         //index
         i++;
 
-        printf("port: %s, j: %lu, k: %s, i: %lu\n", argv[1], j, k, i);
-
         if ((!looker_debug) && (looker_debug_old))
         {
             stat_success = 0;
@@ -104,6 +102,7 @@ int main(int argc, char *argv[])
             looker_debug_old = 1;
 
         STAT(looker_update());
+//        sleep(1);
     }
 
     looker_destroy();

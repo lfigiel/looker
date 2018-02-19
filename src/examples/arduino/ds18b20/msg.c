@@ -133,10 +133,14 @@ void msg_decode(msg_t *msg, unsigned char in)
 
         case COMMAND_VALUE_SET:
             PRINT(dir);PRINT("COMMAND_VALUE_SET\n");
+            //var index
+            PRINTLN2("  var_index: ", msg->payload[1]);
         break;
 
         case COMMAND_STYLE_SET:
             PRINT(dir);PRINT("COMMAND_STYLE_SET\n");
+            //var index
+            PRINTLN2("  var_index: ", msg->payload[1]);
             PRINT("  style: ");
             if (msg->payload[2])
             {
@@ -251,18 +255,19 @@ unsigned char msg_get(msg_t *msg)
                 else
                 {
                     msg->payload_size = rx;
+                    PRINTLN2("msg: rx (payload size): ", msg->payload_size);
                     msg->payload_pos = 0;
                     msg->crc = crc_8(&rx, 1);
-//PRINTF1("msg: crc: %u\n", msg->crc);
+                    PRINTLN2("msg: crc: ", msg->crc);
                     msg->pos++; 
                 }
             break;
 
             case POS_PAYLOAD:
                 msg->payload[msg->payload_pos] = rx;
-//PRINTF1("msg: rx: %u\n", msg->payload[msg->payload_pos]);
+                PRINTLN2("msg: rx: ", msg->payload[msg->payload_pos]);
                 msg->crc = update_crc_8(msg->crc, rx);
-//PRINTF1("msg: crc: %u\n", msg->crc);
+                PRINTLN2("msg: crc: ", msg->crc);
                 if (++msg->payload_pos >= msg->payload_size)
                     msg->pos++; 
             break;
@@ -306,27 +311,27 @@ void msg_send(msg_t *msg)
     //send prefix
     tx = LOOKER_MSG_PREFIX;
     looker_send(&tx, 1);
-//PRINTF1("msg: tx: %u\n", tx);
+    PRINTLN2("msg: tx: ", tx);
 
     //send payload size
     looker_send(&msg->payload_size, 1);
-//PRINTF1("msg: tx: %u\n", msg->payload_size);
+    PRINTLN2("msg: tx (payload size): ", msg->payload_size);
     crc = crc_8(&msg->payload_size, 1);
-//PRINTF1("msg: crc: %u\n", crc);
+    PRINTLN2("msg: crc: ", crc);
 
     //send payload
     size_t t;
     for (t=0; t<msg->payload_size; t++)
     {
         looker_send(&msg->payload[t], 1);
-//PRINTF1("msg: tx: %u\n", msg->payload[t]);
+        PRINTLN2("msg: tx: ", msg->payload[t]);
         crc = update_crc_8(crc, msg->payload[t]);
-//PRINTF1("msg: crc: %u\n", crc);
+        PRINTLN2("msg: crc: ", crc);
     }
 
     //send checksum
     looker_send(&crc, sizeof(crc));
-//PRINTF1("msg: tx: %u\n", crc);
+    PRINTLN2("msg: tx: ", crc);
 
 #ifdef DEBUG_MSG_DECODE
     msg_decode(msg, 0);
