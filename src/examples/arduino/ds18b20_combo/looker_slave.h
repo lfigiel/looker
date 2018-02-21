@@ -4,7 +4,7 @@ Copyright (c) 2018 Lukasz Figiel
 
 #include "looker_common.h"
 
-//#define LOOKER_COMBO
+#define LOOKER_COMBO
 
 //these are valid also in combo mode for both master and slave
 #define LOOKER_SLAVE_USE_MALLOC
