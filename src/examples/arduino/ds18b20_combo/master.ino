@@ -10,7 +10,6 @@ volatile float temp;
 size_t i;
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
-volatile unsigned char looker_debug;
 
 void master_setup(void)
 {
@@ -18,7 +17,6 @@ void master_setup(void)
     looker_connect(LOOKER_SSID, LOOKER_PASS, "combo");
     looker_reg("i", &i, sizeof(i), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, NULL);
     looker_reg("Temp [C]", &temp, sizeof(temp), LOOKER_TYPE_FLOAT_1, LOOKER_LABEL_VIEW, NULL);
-    looker_reg("looker_debug", &looker_debug, sizeof(looker_debug), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, NULL);
 }
 
 void master_loop(void)
