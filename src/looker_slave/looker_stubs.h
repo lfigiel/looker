@@ -15,9 +15,11 @@ extern "C" {
 //#define DEBUG
 
 #ifdef DEBUG
-    #define DEBUG_MSG_DECODE
-    #define DEBUG_MSG_ACK
-    #define DEBUG_MSG_ACK_WAIT
+//    #define DEBUG_NETWORK
+//    #define DEBUG_MSG_DECODE
+//    #define DEBUG_MSG_CHECKSUM
+//    #define DEBUG_MSG_DELAY
+//    #define DEBUG_UPDATE
 
     EXTERN void debug_print(const char *s);
     EXTERN void debug_println2(const char *s, int i);

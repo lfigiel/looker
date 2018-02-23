@@ -43,9 +43,6 @@ lfigiel@gmail.com
 #define WIFI_TIMEOUT 20    //s
 #define MS_TIMEOUT 2000    //ms
 #define MS_TIMEOUT_MIN (MS_TIMEOUT-1000000) //in ms
-#ifndef LOOKER_COMBO
-    #define MSG_NEW msg.pos = POS_PREFIX
-#endif //LOOKER_COMBO
 
 #ifdef LOOKER_COMBO
 typedef struct {
@@ -75,7 +72,7 @@ typedef struct {
 #endif //LOOKER_COMBO
 
 //todo: change vars to static
-//todo: add LOOKER_ to var names
+//todo: add LOOKER_ to var names because of the combo mode
 
 //globals
 looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
@@ -86,11 +83,10 @@ looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
 #endif //LOOKER_SLAVE_USE_MALLOC
 size_t var_cnt;      //total variables count
 unsigned char http_request;
-unsigned char form_submitted;
+int server_arg = -1;
 unsigned char *looker_debug_show = NULL;
 
 #ifndef LOOKER_COMBO
-    msg_t msg;
     extern size_t stat_ack_get_failures;
     extern size_t stat_ack_send_failures;
 #endif //LOOKER_COMBO
@@ -138,6 +134,9 @@ unsigned long long atoull(const char *s);
 void print_html(void);
 static looker_exit_t network_connect(char *ssid, char *pass);
 static void pointers_update(void);
+#ifndef LOOKER_COMBO
+    static looker_exit_t payload_process(msg_t *msg);
+#endif //LOOKER_COMBO
 
 //todo: also static or enough if only in prototype
 void pointers_update(void)
@@ -167,7 +166,7 @@ void pointers_update(void)
 looker_exit_t network_connect(const char *ssid, const char *pass)
 {
     if (!ssid)
-        return LOOKER_EXIT_BAD_PARAMETER;
+        return LOOKER_EXIT_WRONG_PARAMETER;
 
     PRINT("  ssid: "); PRINT(ssid); PRINT("\n");
     // Connect to WiFi network
@@ -227,44 +226,44 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
         return LOOKER_EXIT_NO_MEMORY;
 
     if (type >= LOOKER_TYPE_LAST)
-        return LOOKER_EXIT_BAD_PARAMETER;
+        return LOOKER_EXIT_WRONG_PARAMETER;
 
     if (size > LOOKER_SLAVE_VAR_VALUE_SIZE)
-        return LOOKER_EXIT_BAD_PARAMETER;
+        return LOOKER_EXIT_WRONG_PARAMETER;
 
     if ((type >= LOOKER_TYPE_FLOAT_0) && (type <= LOOKER_TYPE_FLOAT_4) && (size != sizeof(float)) && (size != sizeof(double)))
-        return LOOKER_EXIT_BAD_PARAMETER;
+        return LOOKER_EXIT_WRONG_PARAMETER;
 
     if (name && (strlen(name) + 1 > LOOKER_SLAVE_VAR_NAME_SIZE))
-        return LOOKER_EXIT_BAD_PARAMETER;
+        return LOOKER_EXIT_WRONG_PARAMETER;
 
     if (label >= LOOKER_LABEL_LAST)
-        return LOOKER_EXIT_BAD_PARAMETER;
+        return LOOKER_EXIT_WRONG_PARAMETER;
 
 #if LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE
     if (style && *style &&(strlen(*style) + 1 > LOOKER_VAR_STYLE_SIZE))
 #else
     if (style &&(strlen(style) + 1 > LOOKER_VAR_STYLE_SIZE))
 #endif //LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE
-        return LOOKER_EXIT_BAD_PARAMETER;
+        return LOOKER_EXIT_WRONG_PARAMETER;
 
     size_t i;
     //one ssid, one pass, one domain
     if ((label == LOOKER_LABEL_SSID) || (label == LOOKER_LABEL_PASS) || (label == LOOKER_LABEL_DOMAIN))
     {
         //in combo mode ssid, pass and domain are already set up in connect function
-        return LOOKER_EXIT_BAD_PARAMETER;
+        return LOOKER_EXIT_WRONG_PARAMETER;
     }
     else
     {
         //name is a must
         if (!name)
-            return LOOKER_EXIT_BAD_PARAMETER;
+            return LOOKER_EXIT_WRONG_PARAMETER;
 
         //name cannot be duplicated
         for (i=0; i<var_cnt; i++)
             if ((var[i].name) && (!strcmp(var[i].name, name)))
-                return LOOKER_EXIT_BAD_PARAMETER;
+                return LOOKER_EXIT_WRONG_PARAMETER;
     }
 #endif //LOOKER_SLAVE_SANITY_TEST
 
@@ -636,7 +635,6 @@ void ticker_handler()
     if (msg_timeout)
         if (!--msg_timeout)
         {
-            MSG_NEW;
             stat_msg_timeouts++;
         }
 //todo: remove ms_timeout from combo
@@ -666,16 +664,14 @@ void ticker_handler()
 void handle_root()
 {
     if (server.args())
-    {
-//todo: copy args to buffer - will help with multiple http requests
-        form_submitted = 1;
-    }
+        server_arg = 0; //0 - index of first arg to process
     http_request = 1;
 }
  
 looker_exit_t master_var_set(size_t i)
 {
 #ifndef LOOKER_COMBO
+    msg_t msg;
     unsigned char ack;
     looker_exit_t err;
 
@@ -683,22 +679,15 @@ looker_exit_t master_var_set(size_t i)
     msg.payload[msg.payload_size++] = i;
     memcpy(&msg.payload[msg.payload_size], var[i].value_current, var[i].size);
     msg.payload_size += var[i].size;
-    do
-    {
-        msg_send(&msg);
-        if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
-        {
-            return err;
-        }
-    } while (ack != ACK_SUCCESS);
+    msg_send(&msg);
 #endif //LOOKER_COMBO
     return LOOKER_EXIT_SUCCESS;
 }
 
-void var_process(const char *var_name, const char *var_value)
+unsigned char var_replace(const char *var_name, const char *var_value)
 {
     if (!var_cnt)
-        return; 
+        return 0;
 
     //find
     int i = 0;
@@ -706,7 +695,7 @@ void var_process(const char *var_name, const char *var_value)
         i++;
 
     if (i == var_cnt)
-        return;
+        return 0;
 
     //replace if different
     switch (var[i].type) {
@@ -721,7 +710,7 @@ void var_process(const char *var_name, const char *var_value)
             {
                 memcpy(var[i].value_current, &value_new, var[i].size);
                 master_var_set(i);
-                return;
+                return 1;
             }
         break;
         }
@@ -758,7 +747,7 @@ void var_process(const char *var_name, const char *var_value)
 #endif //LOOKER_COMBO
                     }
                 }
-                return;
+                return 1;
             }
         break;
         }
@@ -792,7 +781,7 @@ void var_process(const char *var_name, const char *var_value)
                     memcpy(var[i].value_current, &value_new, var[i].size);
 
                 master_var_set(i);
-                return;
+                return 1;
             }
         break;
         }
@@ -802,23 +791,23 @@ void var_process(const char *var_name, const char *var_value)
                 strcpy((char *) var[i].value_current, var_value);
                 var[i].size = strlen((char *) var[i].value_current) + 1;
                 master_var_set(i);
-                return;
+                return 1;
             }
         break;
         default:
-            return;
+            return 0;
     }
-    return;
+    return 0;
 }
 
 #ifndef LOOKER_COMBO
-static looker_exit_t register_process(void)
+static looker_exit_t register_process(msg_t *msg)
 {
     size_t i = 1;
 
     //only new variable
-    if (msg.payload[i++] != var_cnt)
-        return LOOKER_EXIT_BAD_PARAMETER;
+    if (msg->payload[i++] != var_cnt)
+        return LOOKER_EXIT_WRONG_PARAMETER;
 
 #ifdef LOOKER_SLAVE_SANITY_TEST
     if (var_cnt >= LOOKER_SLAVE_VAR_COUNT)
@@ -837,20 +826,20 @@ static looker_exit_t register_process(void)
     pointers_update();
 #endif //LOOKER_SLAVE_USE_MALLOC
 
-    var[var_cnt].size = msg.payload[i++];
-    var[var_cnt].type = msg.payload[i++];
+    var[var_cnt].size = msg->payload[i++];
+    var[var_cnt].type = msg->payload[i++];
 
     //reset value
-    //value will be transferred during update (unless it is zero) not register
+    //value will be transferred (unless it is zero) during update not register
     if (var[var_cnt].type == LOOKER_TYPE_STRING)
         var[var_cnt].value_current[0] = 0;
     else
         memset(var[var_cnt].value_current, 0, var[var_cnt].size);
 
-    strcpy(var[var_cnt].name, (char *) &msg.payload[i]);
+    strcpy(var[var_cnt].name, (char *) &msg->payload[i]);
     i += strlen(var[var_cnt].name) + 1;
 
-    var[var_cnt].label = (looker_label_t) msg.payload[i++];
+    var[var_cnt].label = (looker_label_t) msg->payload[i++];
 
     //reset style
     var[var_cnt].style_current[0] = 0;
@@ -868,13 +857,13 @@ static looker_exit_t register_process(void)
     var_cnt++;
 }
 
-static looker_exit_t payload_process(void)
+static looker_exit_t payload_process(msg_t *msg)
 {
     size_t i, j;
     unsigned char ack;
     looker_exit_t err;
 
-    switch (msg.payload[0]) {
+    switch (msg->payload[0]) {
         case COMMAND_RESET:
             rebooted = 0;
             var_cnt = 0;
@@ -891,8 +880,9 @@ static looker_exit_t payload_process(void)
                 slave_state = LOOKER_SLAVE_STATE_CONNECTED;
             else
                 slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
+            server_arg = -1;
             stat_s_resets++;
-            ack_send(&msg, ACK_SUCCESS);
+            ack_send(RESPONSE_ACK_SUCCESS);
         break;
 
         case COMMAND_CONNECT:
@@ -902,79 +892,75 @@ static looker_exit_t payload_process(void)
                 led_period(80);
                 slave_state = LOOKER_SLAVE_STATE_CONNECTING;
             }
-            ack_send(&msg, ACK_SUCCESS);
+            ack_send(RESPONSE_ACK_SUCCESS);
         break;
 
         case COMMAND_DISCONNECT:
             WiFi.disconnect();
-            ack_send(&msg, ACK_SUCCESS);
+            ack_send(RESPONSE_ACK_SUCCESS);
         break;
         
         case COMMAND_STATUS_GET:
-            ack_send(&msg, ACK_SUCCESS);
             //send status
-            msg_begin(&msg, RESPONSE_STATUS);
-            msg.payload[msg.payload_size++] = rebooted;
-            msg.payload[msg.payload_size++] = slave_state;
-            do
             {
+                msg_t msg;
+                msg_begin(&msg, RESPONSE_STATUS);
+                msg.payload[msg.payload_size++] = rebooted;
+                msg.payload[msg.payload_size++] = slave_state;
                 msg_send(&msg);
-                if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
-                {
-                    return err;
-                }
-            } while (ack != ACK_SUCCESS);
+            }
         break;
 
         case COMMAND_VAR_REG:
-            register_process();
+            register_process(msg);
             stat_ms_updates++;
-            ack_send(&msg, ACK_SUCCESS);
+            ack_send(RESPONSE_ACK_SUCCESS);
         break;
 
         case COMMAND_VALUE_SET:
-            memcpy(var[msg.payload[1]].value_current, &msg.payload[2], var[msg.payload[1]].size);
+            memcpy(var[msg->payload[1]].value_current, &msg->payload[2], var[msg->payload[1]].size);
             stat_ms_updates++;
-            ack_send(&msg, ACK_SUCCESS);
+            ack_send(RESPONSE_ACK_SUCCESS);
         break;
 
         case COMMAND_STYLE_SET:
-            strcpy(var[msg.payload[1]].style_current, (char *) &msg.payload[2]);
+            strcpy(var[msg->payload[1]].style_current, (char *) &msg->payload[2]);
             stat_ms_updates++;
-            ack_send(&msg, ACK_SUCCESS);
+            ack_send(RESPONSE_ACK_SUCCESS);
         break;
 
+        case COMMAND_VALUE_REPEAT:
+            if (server_arg > 0)
+                server_arg--;
+            //no break on purpose
+
         case COMMAND_VALUE_GET:
-            ack_send(&msg, ACK_SUCCESS);
-
-            if (form_submitted)
+            if (server_arg >= 0)
             {
-                for (i=0; i<server.args(); i++)
+                do {
+                    do {
+                        i = (unsigned int) server_arg;
+                        //process only last variable with same name
+                        j = i+1;
+                        while ((j<server.args()) && (strcmp(server.argName(i).c_str(), server.argName(j).c_str()) != 0))
+                            j++;
+                        if (j < server.args())
+                            server_arg++;
+                    } while (j < server.args());
+                } while ((!var_replace(server.argName(i).c_str(), server.arg(i).c_str())) && (++server_arg < server.args()));
+                if (server_arg < server.args())
                 {
-                    //process only last variable with same name
-                    j = i+1;
-                    while ((j<server.args()) && (strcmp(server.argName(i).c_str(), server.argName(j).c_str()) != 0))
-                        j++;
-
-                    if (j == server.args())
-                    {
-                        var_process(server.argName(i).c_str(), server.arg(i).c_str());
-                        stat_sm_updates++;
-                    }
+                    stat_sm_updates++;
+                    break;
                 }
-                form_submitted = 0;
             }
-
             //done with values
-            msg_begin(&msg, RESPONSE_VALUE_LAST);
-            do
-            {
-                msg_send(&msg);
-                if ((err = ack_wait(&ack)) != LOOKER_EXIT_SUCCESS)
-                {
-                    return err;
-                }
-            } while (ack != ACK_SUCCESS);
+            msg_t msg;
+            msg_begin(&msg, RESPONSE_VALUE_NO_MORE);
+            msg_send(&msg);
+
+            //all args were processed
+            server_arg = -1;
 
             //all good
             if (http_request)
@@ -985,10 +971,11 @@ static looker_exit_t payload_process(void)
                 
             stat_s_loops++;
             ms_timeout = MS_TIMEOUT;
+
         break;
 
         default:
-            return LOOKER_EXIT_BAD_COMMAND;
+            return LOOKER_EXIT_WRONG_COMMAND;
         break;
     }
     return LOOKER_EXIT_SUCCESS;
@@ -1050,26 +1037,29 @@ void slave_loop(void)
             led_period(500);
             slave_state = LOOKER_SLAVE_STATE_CONNECTED;
         }
-        server.handleClient();
+
+        //only if no args to process
+        if (server_arg < 0)
+            server.handleClient();
 
 #ifdef LOOKER_COMBO
-        if (form_submitted)
+        size_t i, j;
+        if (server_arg >= 0)
         {
-            size_t i,j;
-            for (i=0; i<server.args(); i++)
-            {
-                //process only last variable with same name
-                j = i+1;
-                while ((j<server.args()) && (strcmp(server.argName(i).c_str(), server.argName(j).c_str()) != 0))
-                    j++;
-
-                if (j == server.args())
-                {
-                    var_process(server.argName(i).c_str(), server.arg(i).c_str());
+            do {
+                do {
+                    i = (unsigned int) server_arg;
+                    //process only last variable with same name
+                    j = i+1;
+                    while ((j<server.args()) && (strcmp(server.argName(i).c_str(), server.argName(j).c_str()) != 0))
+                        j++;
+                    if (j < server.args())
+                        server_arg++;
+                } while (j < server.args());
+                if (var_replace(server.argName(i).c_str(), server.arg(i).c_str()))
                     stat_sm_updates++;
-                }
-            }
-            form_submitted = 0;
+            } while (++server_arg < server.args());
+            server_arg = -1;
         }
 #endif //LOOKER_COMBO
     }
@@ -1082,33 +1072,37 @@ void slave_loop(void)
 #ifndef LOOKER_COMBO
     if (looker_data_available())
     {
-        unsigned char err = msg_get(&msg);
-        if (!err)
-        {
-            if (msg_complete(&msg))
-            {
-#ifdef DEBUG_MSG_DECODE
-                msg_decode(&msg, 1);
-#endif //DEBUG_MSG_DECODE
+        msg_t msg;
+        looker_exit_t err = msg_get(&msg);
+
+        switch (err) {
+            case LOOKER_EXIT_SUCCESS:
                 msg_timeout = 0;
-                payload_process();
-            }
-        }
-        else
-        {
-            MSG_NEW;
-            if (err == 1)
+                payload_process(&msg);
+            break;
+
+            case LOOKER_EXIT_WRONG_PREFIX:
                 stat_msg_prefix_errors++;
-            else if (err == 2)
+            break;
+
+            case LOOKER_EXIT_WRONG_PAYLOAD_SIZE:
                 stat_msg_payload_errors++;
-            else if (err == 3)
+            break;
+
+            case LOOKER_EXIT_WRONG_CHECKSUM:
                 stat_msg_checksum_errors++;
-            
+            break;
+
+            default:
+            break;
+        }
+        if (err != LOOKER_EXIT_SUCCESS)
+        {
             //empty rx buffer
             unsigned char rx;
             while (looker_data_available())
                 looker_get(&rx, 1);
-            ack_send(&msg, ACK_FAILURE);
+            ack_send(RESPONSE_ACK_FAILURE);
         }
     }
 #else
@@ -1215,7 +1209,7 @@ void slave_loop(void)
     if ((ms_timeout < 0) && (http_request))
     {
         print_html();
-        form_submitted = 0;
+        server_arg = -1;
         http_request = 0;
     }
 }

@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
     strcpy(style, "");
 
 	looker_reg("Imie", imie, 0, LOOKER_TYPE_STRING, LOOKER_LABEL_EDIT, NULL);
-	looker_reg("Wiek", &wiek, sizeof(wiek), LOOKER_TYPE_UINT, LOOKER_LABEL_EDIT, style);
+	looker_reg("Wiek", &wiek, sizeof(wiek), LOOKER_TYPE_UINT, LOOKER_LABEL_EDIT, NULL);
 
     do {
         printf("Podaj imie: ");

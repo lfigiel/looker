@@ -141,6 +141,7 @@ void msg_decode(msg_t *msg, unsigned char in)
             PRINT(dir);PRINT("COMMAND_STYLE_SET\n");
             //var index
             PRINTLN2("  var_index: ", msg->payload[1]);
+            //style
             PRINT("  style: ");
             if (msg->payload[2])
             {
@@ -154,16 +155,47 @@ void msg_decode(msg_t *msg, unsigned char in)
             PRINT(dir);PRINT("COMMAND_VALUE_GET\n");
         break;
 
+        case RESPONSE_ACK_SUCCESS:
+            PRINT(dir);PRINT("RESPONSE_ACK_SUCCESS\n");
+        break;
+
+        case RESPONSE_ACK_FAILURE:
+            PRINT(dir);PRINT("RESPONSE_ACK_FAILURE\n");
+        break;
+
         case RESPONSE_STATUS:
             PRINT(dir);PRINT("RESPONSE_STATUS\n");
+            PRINT("  slave_state: ");
+            switch (msg->payload[2]) {
+                case LOOKER_SLAVE_STATE_UNKNOWN:
+                    PRINT("LOOKER_SLAVE_STATE_UNKNOWN\n");
+                break;
+                case LOOKER_SLAVE_STATE_DISCONNECTING:
+                    PRINT("LOOKER_SLAVE_STATE_DISCONNECTING\n");
+                break;
+                case LOOKER_SLAVE_STATE_DISCONNECTED:
+                    PRINT("LOOKER_SLAVE_STATE_DISCONNECTED\n");
+                break;
+                case LOOKER_SLAVE_STATE_CONNECTING:
+                    PRINT("LOOKER_SLAVE_STATE_CONNECTING\n");
+                break;
+                case LOOKER_SLAVE_STATE_CONNECTED:
+                    PRINT("LOOKER_SLAVE_STATE_CONNECTED\n");
+                break;
+                default:
+                    PRINT("UNDEFINED !!!\n");
+                break;
+            }
         break;
 
         case RESPONSE_VALUE:
             PRINT(dir);PRINT("RESPONSE_VALUE\n");
+            //var index
+            PRINTLN2("  var_index: ", msg->payload[1]);
         break;
 
-        case RESPONSE_VALUE_LAST:
-            PRINT(dir);PRINT("RESPONSE_VALUE_LAST\n");
+        case RESPONSE_VALUE_NO_MORE:
+            PRINT(dir);PRINT("RESPONSE_VALUE_NO_MORE\n");
         break;
 
         default:
@@ -178,131 +210,141 @@ void msg_begin(msg_t *msg, unsigned char control)
     msg->payload[msg->payload_size++] = control;
 }
 
-unsigned char ack_get(void)
+looker_exit_t ack_get(unsigned char *ack)
 {
-    uint8_t ack;
-    looker_get(&ack, 1);
+    msg_t msg;
+    looker_exit_t err;
 
-    if (ack != ACK_SUCCESS)
+    if ((err = msg_get(&msg)) == LOOKER_EXIT_SUCCESS)
     {
-        PRINT("<-ACK_FAILURE\n");
+        if ((msg.payload[0] == RESPONSE_ACK_FAILURE) || (msg.payload[0] == RESPONSE_ACK_SUCCESS))
+        {
+            *ack = msg.payload[0];
 #ifndef LOOKER_COMBO
-        stat_ack_get_failures++;
+            if (msg.payload[0] == RESPONSE_ACK_FAILURE)
+                stat_ack_get_failures++;
 #endif //LOOKER_COMBO
-    }
-#ifdef DEBUG_MSG_ACK
-    else
-        PRINT("<-ACK_SUCCESS\n");
-#endif //DEBUG_MSG_ACK
-    return ack;
-}
-
-void ack_send(msg_t *msg, unsigned char ack)
-{
-    unsigned char rx;
-
-    //reset msg position
-    msg->pos = POS_PREFIX;
-
-    //empty rx buffer
-    while (looker_data_available())
-        looker_get(&rx, 1);
-
-    looker_send(&ack, 1);
-
-    if (ack != ACK_SUCCESS)
-    {
-        PRINT("->ACK_FAILURE\n");
-#ifndef LOOKER_COMBO
-        stat_ack_send_failures++;
-#endif //LOOKER_COMBO
-    }
-#ifdef DEBUG_MSG_ACK
-    else
-        PRINT("->ACK_SUCCESS\n");
-#endif //DEBUG_MSG_ACK
-}
-
-unsigned char msg_get(msg_t *msg)
-{
-    unsigned char rx;
-
-    while (looker_data_available())
-    {
-        looker_get(&rx, 1);
-        switch (msg->pos) {
-            case POS_PREFIX:
-                msg->complete = 0;
-                //check prefix
-                if (rx != LOOKER_MSG_PREFIX)
-                {
-//todo: remove msg->pos = POS_PREFIX everywhere in this function, this is reset elsewhere
-                    msg->pos = POS_PREFIX;
-                    PRINT("Error: msg_get: prefix\n");
-                    return 1;
-                }
-                else
-                    msg->pos++; 
-            break;
-            case POS_PAYLOAD_SIZE:
-                //check payload size
-                if (rx > LOOKER_MSG_PAYLOAD_SIZE)
-                {
-                    msg->pos = POS_PREFIX;
-                    PRINT("Error: msg_get: payload size\n");
-                    return 2;
-                }
-                else
-                {
-                    msg->payload_size = rx;
-                    PRINTLN2("msg: rx (payload size): ", msg->payload_size);
-                    msg->payload_pos = 0;
-                    msg->crc = crc_8(&rx, 1);
-                    PRINTLN2("msg: crc: ", msg->crc);
-                    msg->pos++; 
-                }
-            break;
-
-            case POS_PAYLOAD:
-                msg->payload[msg->payload_pos] = rx;
-                PRINTLN2("msg: rx: ", msg->payload[msg->payload_pos]);
-                msg->crc = update_crc_8(msg->crc, rx);
-                PRINTLN2("msg: crc: ", msg->crc);
-                if (++msg->payload_pos >= msg->payload_size)
-                    msg->pos++; 
-            break;
-
-            case POS_CHECKSUM:
-                //check checksum
-                if (msg->crc == rx)
-                {
-                    msg->pos = POS_PREFIX;
-                    msg->complete = 1;
-                }
-                else
-                {
-                    msg->pos = POS_PREFIX;
-                    PRINT("Error: msg_get: checksum\n");
-                    return 3;
-                }
-            break;
-
-            default:
-                msg->pos = POS_PREFIX;
-                PRINT("Error: msg_get: pos\n");
-                return 4;
-            break;
+            return LOOKER_EXIT_SUCCESS;
         }
     }
+    return LOOKER_EXIT_WRONG_RESPONSE;
+}
+
+void ack_send(unsigned char ack)
+{
+    msg_t msg;
+    msg_begin(&msg, ack);
+    msg_send(&msg);
+
+#ifndef LOOKER_COMBO
+    if (ack == RESPONSE_ACK_FAILURE)
+        stat_ack_send_failures++;
+#endif //LOOKER_COMBO
+}
+
+looker_exit_t msg_get(msg_t *msg)
+{
+    unsigned char rx;
+    msg_pos_t msg_pos = POS_PREFIX;
+    unsigned int pay_pos;
+    unsigned int j;
+
+    j = 0;
+    do {
+        looker_delay_1ms();
+
+        if (looker_data_available())
+        {
+            do {
+                looker_get(&rx, 1);
+                switch (msg_pos) {
+                    case POS_PREFIX:
+                        //check prefix
+                        if (rx != LOOKER_MSG_PREFIX)
+                        {
+                            PRINTLN2("Error: msg_get: prefix: ", rx);
+                            return LOOKER_EXIT_WRONG_PREFIX;
+                        }
+                        else
+                            msg_pos = POS_PAYLOAD_SIZE; 
+                    break;
+                    case POS_PAYLOAD_SIZE:
+                        //check payload size
+                        if (rx > LOOKER_MSG_PAYLOAD_SIZE)
+                        {
+                            PRINTLN2("Error: msg_get: payload size: ", rx);
+                            return LOOKER_EXIT_WRONG_PAYLOAD_SIZE;
+                        }
+                        else
+                        {
+                            msg->payload_size = rx;
+#ifdef DEBUG_MSG_CHECKSUM
+                            PRINTLN2("msg: rx (payload size): ", msg->payload_size);
+#endif //DEBUG_MSG_CHECKSUM
+                            msg->crc = crc_8(&rx, 1);
+#ifdef DEBUG_MSG_CHECKSUM
+                            PRINTLN2("msg: crc: ", msg->crc);
+#endif //DEBUG_MSG_CHECKSUM
+                            pay_pos = 0;
+                            msg_pos = POS_PAYLOAD; 
+                        }
+                    break;
+
+                    case POS_PAYLOAD:
+                        msg->payload[pay_pos] = rx;
+#ifdef DEBUG_MSG_CHECKSUM
+                        PRINTLN2("msg: rx: ", msg->payload[pay_pos]);
+#endif //DEBUG_MSG_CHECKSUM
+                        msg->crc = update_crc_8(msg->crc, rx);
+#ifdef DEBUG_MSG_CHECKSUM
+                        PRINTLN2("msg: crc: ", msg->crc);
+#endif //DEBUG_MSG_CHECKSUM
+                        if (++pay_pos >= msg->payload_size)
+                            msg_pos = POS_CHECKSUM; 
+                    break;
+
+                    case POS_CHECKSUM:
+                        //check checksum
+                        if (msg->crc == rx)
+                        {
+#ifdef DEBUG_MSG_DELAY
+                            PRINTLN2("  msg_get: delay: ", j);
+#endif //DEBUG_MSG_WAIT
+#ifdef DEBUG_MSG_DECODE
+                            msg_decode(msg, 1);
+#endif //DEBUG_MSG_DECODE
+                            return LOOKER_EXIT_SUCCESS;
+                        }
+                        else
+                        {
+                            PRINTLN2("Error: msg_get: checksum: ", rx);
+                            return LOOKER_EXIT_WRONG_CHECKSUM;
+                        }
+                    break;
+
+                    default:
+                        PRINT("Error: msg_get: pos\n");
+                        return LOOKER_EXIT_WRONG_DATA;
+                    break;
+                }
+            } while (looker_data_available());
+        }
+
+    } while (++j < MSG_TIMEOUT);
+
+    //timeout
+    if (j >= MSG_TIMEOUT)
+    {
+        PRINTLN2("Error: msg_get: timeout: ", j);
+        return LOOKER_EXIT_TIMEOUT;
+    }
+
     return LOOKER_EXIT_SUCCESS;
 }
 
 void msg_send(msg_t *msg)
 {
     unsigned char rx, tx, crc;
-
-    //reset msg position
-    msg->pos = POS_PREFIX;
 
     //empty rx buffer
     while (looker_data_available())
@@ -311,64 +353,42 @@ void msg_send(msg_t *msg)
     //send prefix
     tx = LOOKER_MSG_PREFIX;
     looker_send(&tx, 1);
+#ifdef DEBUG_MSG_CHECKSUM
     PRINTLN2("msg: tx: ", tx);
+#endif //DEBUG_MSG_CHECKSUM
 
     //send payload size
     looker_send(&msg->payload_size, 1);
+#ifdef DEBUG_MSG_CHECKSUM
     PRINTLN2("msg: tx (payload size): ", msg->payload_size);
+#endif //DEBUG_MSG_CHECKSUM
     crc = crc_8(&msg->payload_size, 1);
+#ifdef DEBUG_MSG_CHECKSUM
     PRINTLN2("msg: crc: ", crc);
+#endif //DEBUG_MSG_CHECKSUM
 
     //send payload
-    size_t t;
-    for (t=0; t<msg->payload_size; t++)
+    size_t i;
+    for (i=0; i<msg->payload_size; i++)
     {
-        looker_send(&msg->payload[t], 1);
-        PRINTLN2("msg: tx: ", msg->payload[t]);
-        crc = update_crc_8(crc, msg->payload[t]);
+        looker_send(&msg->payload[i], 1);
+#ifdef DEBUG_MSG_CHECKSUM
+        PRINTLN2("msg: tx: ", msg->payload[i]);
+#endif //DEBUG_MSG_CHECKSUM
+        crc = update_crc_8(crc, msg->payload[i]);
+#ifdef DEBUG_MSG_CHECKSUM
         PRINTLN2("msg: crc: ", crc);
+#endif //DEBUG_MSG_CHECKSUM
     }
 
     //send checksum
     looker_send(&crc, sizeof(crc));
+#ifdef DEBUG_MSG_CHECKSUM
     PRINTLN2("msg: tx: ", crc);
+#endif //DEBUG_MSG_CHECKSUM
 
 #ifdef DEBUG_MSG_DECODE
     msg_decode(msg, 0);
 #endif //DEBUG_MSG_DECODE
-}
-
-unsigned char msg_complete(msg_t *msg)
-{
-    unsigned char complete = msg->complete;
-    msg->complete = 0;
-    return complete;
-}
-
-looker_exit_t ack_wait(unsigned char *ack)
-{
-    //wait for ack
-    size_t j;
-    for (j=0; j<ACK_TIMEOUT; j++)
-    {
-        looker_delay_1ms();
-        if (looker_data_available())
-        {
-            *ack = ack_get();
-            break;
-        }
-    }
-
-    //timeout
-    if (j >= ACK_TIMEOUT)
-    {
-        PRINTLN2("  ack_wait: timeout: ", j);
-        return LOOKER_EXIT_TIMEOUT;
-    }
-#ifdef DEBUG_MSG_ACK_WAIT
-        else
-            PRINTLN2("  ack_wait: ", j);
-#endif //DEBUG_MSG_ACK_WAIT
-    return LOOKER_EXIT_SUCCESS;
 }
 

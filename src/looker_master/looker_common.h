@@ -5,6 +5,9 @@ Copyright (c) 2018 Lukasz Figiel
 #ifndef LOOKER_COMMON_H
 #define LOOKER_COMMON_H
 
+//master and slave together in one device
+#define LOOKER_COMBO
+
 #define LOOKER_VAR_FLOAT LOOKER_VAR_FLOAT_1
 
 //this is common for master and slave, master stores only pointer to style
@@ -14,8 +17,6 @@ Copyright (c) 2018 Lukasz Figiel
 #define LOOKER_MSG_SIZE 64 //rx buffer needs to be at least that big
 #define LOOKER_MSG_PAYLOAD_SIZE (LOOKER_MSG_SIZE - 3) //msg_prefix, msg_size, msg_checksum
 #define LOOKER_MSG_PREFIX (LOOKER_MSG_PAYLOAD_SIZE + 1) //so these two values are different
-#define ACK_SUCCESS 0
-#define ACK_FAILURE 255
 
 #define LOOKER_STYLE_DISABLED 0
 #define LOOKER_STYLE_FIXED 1
@@ -49,13 +50,17 @@ typedef enum {
 typedef enum {
     LOOKER_EXIT_SUCCESS,
     LOOKER_EXIT_NO_MEMORY,
-    LOOKER_EXIT_BAD_PARAMETER,
-    LOOKER_EXIT_BAD_COMMAND,
-    LOOKER_EXIT_BAD_STATE,
-    LOOKER_EXIT_BAD_RESPONSE,
-    LOOKER_EXIT_TIMEOUT,
-    LOOKER_EXIT_ACK_FAILURE,
+    LOOKER_EXIT_WRONG_PARAMETER,
+    LOOKER_EXIT_WRONG_COMMAND,
+    LOOKER_EXIT_WRONG_STATE,
+    LOOKER_EXIT_WRONG_RESPONSE,
+    LOOKER_EXIT_WRONG_DATA,
+    LOOKER_EXIT_WRONG_PREFIX,
+    LOOKER_EXIT_WRONG_PAYLOAD_SIZE,
+    LOOKER_EXIT_WRONG_CHECKSUM,
     LOOKER_EXIT_NO_DATA,
+    LOOKER_EXIT_ACK_FAILURE,
+    LOOKER_EXIT_TIMEOUT,
 
     LOOKER_EXIT_LAST
 } looker_exit_t;

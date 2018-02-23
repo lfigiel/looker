@@ -5,14 +5,14 @@
 
 #ifdef DEBUG
 #include <SoftwareSerial.h>
-SoftwareSerial mySerial(SW_SERIAL_UNUSED_PIN, 4);  //RX, TX   TX is only used, 4 = D2 in NodeMcu
+SoftwareSerial debugSerial(SW_SERIAL_UNUSED_PIN, 4);  //RX, TX   TX is only used, 4 = D2 in NodeMcu
 #endif //DEBUG
 
 void serial_init(void)
 {
     Serial.begin(57600);
 #ifdef DEBUG
-    mySerial.begin(57600);
+    debugSerial.begin(57600);
 #endif //DEBUG
 }
 
@@ -36,7 +36,6 @@ int looker_get(void *buf, int size)   //non blocking read
         buf = buf + 1;
         num++;
     }
-
     return num;
 }
 
@@ -52,16 +51,17 @@ void looker_send(void *buf, int size)
         delay(10);
     }
 }
+
 #ifdef DEBUG
 void debug_print(const char *s)
 {
-    mySerial.print(s);
+    debugSerial.print(s);
 }
 
 void debug_println2(const char *s, int i)
 {
-    mySerial.print(s);
-    mySerial.println(i);
+    debugSerial.print(s);
+    debugSerial.println(i);
 }
 #endif //DEBUG
 
