@@ -1,2 +1,1 @@
-#define LOOKER_SSID "ssid"
-#define LOOKER_PASS "pass"
+../../../looker_common/wifi.h
