@@ -6,7 +6,6 @@
 #include "wifi.h"
 
 #define DOMAIN "pc"
-#define DEFAULT_STYLE "margin:0;"
 
 int main(int argc, char *argv[])
 {
@@ -15,9 +14,9 @@ int main(int argc, char *argv[])
     char imie[30] = "Nie podano";
     unsigned int wiek = 0;
 
-	if (looker_reg("Imie", imie, 0, LOOKER_TYPE_STRING, LOOKER_LABEL_EDIT, DEFAULT_STYLE))
+	if (looker_reg("Imie", imie, 0, LOOKER_TYPE_STRING, LOOKER_LABEL_EDIT, NULL))
         printf("Error\n");
-	if (looker_reg("Wiek", &wiek, sizeof(wiek), LOOKER_TYPE_UINT, LOOKER_LABEL_EDIT, DEFAULT_STYLE))
+	if (looker_reg("Wiek", &wiek, sizeof(wiek), LOOKER_TYPE_UINT, LOOKER_LABEL_EDIT, NULL))
         printf("Error\n");
 
     int i = 0;

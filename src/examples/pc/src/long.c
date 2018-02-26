@@ -6,7 +6,6 @@
 #include "wifi.h"
 
 #define DOMAIN "pc"
-#define DEFAULT_STYLE "margin:0;"
 
 int main(int argc, char *argv[])
 {
@@ -19,10 +18,10 @@ int main(int argc, char *argv[])
 //    unsigned long long u = 18000000000000000000LU;
     unsigned long long u = 18446744073709551615LU;
 
-	if (looker_reg("i", &i, sizeof(i), LOOKER_TYPE_INT, LOOKER_LABEL_EDIT, DEFAULT_STYLE))
+	if (looker_reg("i", &i, sizeof(i), LOOKER_TYPE_INT, LOOKER_LABEL_EDIT, NULL))
         printf("Error\n");
 
-	if (looker_reg("u", &u, sizeof(u), LOOKER_TYPE_UINT, LOOKER_LABEL_EDIT, DEFAULT_STYLE))
+	if (looker_reg("u", &u, sizeof(u), LOOKER_TYPE_UINT, LOOKER_LABEL_EDIT, NULL))
         printf("Error\n");
 
     while (1)

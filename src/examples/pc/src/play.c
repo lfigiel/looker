@@ -7,7 +7,6 @@
 #include "wifi.h"
 
 #define DOMAIN "pc"
-#define DEFAULT_STYLE "margin:0;"
 
 int main(int argc, char *argv[])
 {
@@ -15,7 +14,7 @@ int main(int argc, char *argv[])
 
     unsigned char play = 0;
 
-	if (looker_reg("Play", &play, sizeof(play), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, DEFAULT_STYLE))
+	if (looker_reg("Play", &play, sizeof(play), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, NULL))
         printf("Error\n");
 
     int i = 0;
