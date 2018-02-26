@@ -6,7 +6,6 @@
 #include "wifi.h"
 
 #define DOMAIN "pc"
-#define DEFAULT_STYLE "margin:0;"
 
 int main(int argc, char *argv[])
 {
@@ -17,10 +16,10 @@ int main(int argc, char *argv[])
     float f = 3.14;
     double d = 4.14;
 
-	if (looker_reg("f", &f, sizeof(f), LOOKER_TYPE_FLOAT_2, LOOKER_LABEL_EDIT, DEFAULT_STYLE))
+	if (looker_reg("f", &f, sizeof(f), LOOKER_TYPE_FLOAT_2, LOOKER_LABEL_EDIT, NULL))
         printf("Error\n");
 
-	if (looker_reg("d", &d, sizeof(d), LOOKER_TYPE_FLOAT_2, LOOKER_LABEL_EDIT, DEFAULT_STYLE))
+	if (looker_reg("d", &d, sizeof(d), LOOKER_TYPE_FLOAT_2, LOOKER_LABEL_EDIT, NULL))
         printf("Error\n");
 
     printf("%ld\n", sizeof(f));

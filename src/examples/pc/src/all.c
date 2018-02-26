@@ -6,7 +6,6 @@
 #include "wifi.h"
 
 #define DOMAIN "pc"
-#define DEFAULT_STYLE "margin:0;"
 
 int main(int argc, char *argv[])
 {
@@ -21,25 +20,25 @@ int main(int argc, char *argv[])
     int var6 = -100;
     double var7 = 3.141592;
 
-	if ((err = looker_reg("var1", &var1, sizeof(var1), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, DEFAULT_STYLE)))
+	if ((err = looker_reg("var1", &var1, sizeof(var1), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, NULL)))
         printf("Error: %d\n", err);
 
-	if ((err = looker_reg("var2", &var2, sizeof(var2), LOOKER_TYPE_UINT, LOOKER_LABEL_EDIT, DEFAULT_STYLE)))
+	if ((err = looker_reg("var2", &var2, sizeof(var2), LOOKER_TYPE_UINT, LOOKER_LABEL_EDIT, NULL)))
         printf("Error: %d\n", err);
 
-	if ((err = looker_reg("var3", &var3, sizeof(var3), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, DEFAULT_STYLE)))
+	if ((err = looker_reg("var3", &var3, sizeof(var3), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, NULL)))
         printf("Error: %d\n", err);
 
-	if ((err = looker_reg("var4", &var4, sizeof(var4), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX_INV, DEFAULT_STYLE)))
+	if ((err = looker_reg("var4", &var4, sizeof(var4), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX_INV, NULL)))
         printf("Error: %d\n", err);
 
-	if ((err = looker_reg("var5", (void *) var5, strlen(var5), LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, DEFAULT_STYLE)))
+	if ((err = looker_reg("var5", (void *) var5, strlen(var5), LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, NULL)))
         printf("Error: %d\n", err);
 
-	if ((err = looker_reg("var6", &var6, sizeof(var6), LOOKER_TYPE_INT, LOOKER_LABEL_VIEW, DEFAULT_STYLE)))
+	if ((err = looker_reg("var6", &var6, sizeof(var6), LOOKER_TYPE_INT, LOOKER_LABEL_VIEW, NULL)))
         printf("Error: %d\n", err);
 
-	if ((err = looker_reg("var7", &var7, sizeof(var7), LOOKER_TYPE_FLOAT_2, LOOKER_LABEL_VIEW, DEFAULT_STYLE)))
+	if ((err = looker_reg("var7", &var7, sizeof(var7), LOOKER_TYPE_FLOAT_2, LOOKER_LABEL_VIEW, NULL)))
         printf("Error: %d\n", err);
 
     while (1) {

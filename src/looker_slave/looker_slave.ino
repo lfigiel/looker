@@ -27,6 +27,7 @@ lfigiel@gmail.com
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
+#include <ArduinoJson.h>
 #include <Ticker.h>
 #include "looker_slave.h"
 #include "looker_stubs.h"
@@ -85,6 +86,7 @@ size_t var_cnt;      //total variables count
 unsigned char http_request;
 int server_arg = -1;
 unsigned char *looker_debug_show = NULL;
+unsigned char json;
 
 #ifndef LOOKER_COMBO
     extern size_t stat_ack_get_failures;
@@ -131,7 +133,9 @@ void print_u64(char *v, unsigned long long i);
 void print_i64(char *v, long long i);
 long long atoll(const char *s);
 unsigned long long atoull(const char *s);
-void print_html(void);
+void URL_response_print(void);
+void json_print(void);
+void html_print(void);
 static looker_exit_t network_connect(char *ssid, char *pass);
 static void pointers_update(void);
 #ifndef LOOKER_COMBO
@@ -413,7 +417,77 @@ unsigned long long atoull(const char *s)
     return l;
 }
 
-void print_html(void)
+void URL_response_print(void)
+{
+    if (json)
+        json_print();
+    else
+        html_print();
+}
+
+void json_print(void)
+{
+    StaticJsonBuffer<512> jsonBuffer;
+    JsonObject& root = jsonBuffer.createObject();
+    char value_text[(LOOKER_SLAVE_VAR_VALUE_SIZE > 20) ? (LOOKER_SLAVE_VAR_VALUE_SIZE + 1) : (20 + 1)]; //20 is the length of max 64-bit number
+    size_t i;
+
+    for (i=0; i<var_cnt; i++)
+    {
+        //skip some vars
+        if ((var[i].label == LOOKER_LABEL_SSID) || (var[i].label == LOOKER_LABEL_PASS) || (var[i].label == LOOKER_LABEL_DOMAIN))
+            continue;
+
+        if (var[i].type == LOOKER_TYPE_INT)
+        {
+            long long value_int = 0;
+            memcpy(&value_int, var[i].value_current, var[i].size);
+            if (var[i].size == 8)
+                print_i64(value_text, value_int);
+            else
+            {
+                if (value_int & (1LU << ((8 * var[i].size) - 1)))
+                    value_int = -~value_int-1;
+                sprintf(value_text, "%ld", value_int);
+            }
+        }
+        else if (var[i].type == LOOKER_TYPE_UINT)
+        {
+            unsigned long long value_uint = 0;
+            memcpy(&value_uint, var[i].value_current, var[i].size);
+            if (var[i].size == 8)
+                print_u64(value_text, value_uint);
+            else
+                sprintf(value_text, "%lu", value_uint);
+        }
+        else if (var[i].type == LOOKER_TYPE_STRING)
+            strcpy(value_text, (char *) var[i].value_current);
+        else if ((var[i].type >= LOOKER_TYPE_FLOAT_0) && (var[i].type <= LOOKER_TYPE_FLOAT_4))
+        {
+            unsigned char prec = var[i].type - LOOKER_TYPE_FLOAT_0;
+            if (var[i].size == sizeof(float))
+            {
+                float f;
+                memcpy(&f, var[i].value_current, sizeof(f));
+                dtostrf(f, 1, prec, value_text);
+            }
+            else if (var[i].size == sizeof(double))
+            {
+                double d;
+                memcpy(&d, var[i].value_current, sizeof(d));
+                dtostrf(d, 1, prec, value_text);
+            }
+        }
+
+        root[var[i].name] = value_text;
+    }
+
+    webString = "";
+    root.printTo(webString);
+    server.send(200, "text/json", webString);
+}
+
+void html_print(void)
 {
     webString =
     "<!doctype html>\n"
@@ -663,8 +737,21 @@ void ticker_handler()
 
 void handle_root()
 {
+    size_t i;
     if (server.args())
+    {
+        //JSON ?
+        i = 0;
+        while ((i<server.args()) && (strcmp(server.argName(i).c_str(), "looker_json") != 0))
+            i++;
+        if (i < server.args())
+            json = 1;
+        else
+            json = 0;
         server_arg = 0; //0 - index of first arg to process
+    }
+    else
+        json = 0;
     http_request = 1;
 }
  
@@ -965,7 +1052,7 @@ static looker_exit_t payload_process(msg_t *msg)
             //all good
             if (http_request)
             {
-                print_html();
+                URL_response_print();
                 http_request = 0;
             }
                 
@@ -999,7 +1086,6 @@ void slave_setup(void)
 
     WiFi.disconnect();
     WiFi.mode(WIFI_STA);
-
     ticker.attach_ms(1, ticker_handler);
 
     pinMode(ledPin, OUTPUT);
@@ -1199,7 +1285,7 @@ void slave_loop(void)
 
     if (http_request)
     {
-        print_html();
+        URL_response_print();
         http_request = 0;
     }        
 
@@ -1208,7 +1294,7 @@ void slave_loop(void)
 
     if ((ms_timeout < 0) && (http_request))
     {
-        print_html();
+        URL_response_print();
         server_arg = -1;
         http_request = 0;
     }
