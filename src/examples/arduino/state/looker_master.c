@@ -180,16 +180,8 @@ static looker_exit_t slave_var_reg(void)
         msg.payload[msg.payload_size++] = i;
         msg.payload[msg.payload_size++] = var[i].size;
         msg.payload[msg.payload_size++] = var[i].type;
-
-        //name can be NULL
-        if (var[i].name)
-        {
-            memcpy(&msg.payload[msg.payload_size], var[i].name, strlen(var[i].name)+1);
-            msg.payload_size += strlen(var[i].name)+1;
-        }
-        else
-            msg.payload[msg.payload_size++] = 0;
-
+        strcpy((char *) &msg.payload[msg.payload_size], var[i].name);
+        msg.payload_size += strlen(var[i].name)+1;
         msg.payload[msg.payload_size++] = var[i].label;
 
         do {
@@ -228,8 +220,34 @@ static looker_exit_t slave_var_set(void)
 
     for (i=0; i<var_cnt; i++)
     {
+        //skip some vars
+        if ((var[i].label == LOOKER_LABEL_SSID) || (var[i].label == LOOKER_LABEL_PASS) || (var[i].label == LOOKER_LABEL_DOMAIN))
+            continue;
+
         //value
-        if (memcmp(var[i].value_old, (const void *) var[i].value_current, var[i].size) != 0)
+        if (var[i].type == LOOKER_TYPE_STRING)
+        {
+            if (strcmp(var[i].value_old, (const char *) var[i].value_current) != 0)
+            {
+                var[i].value_update = UPDATED_FROM_MASTER;
+
+                msg_begin(&msg, COMMAND_VALUE_SET);
+                msg.payload[msg.payload_size++] = i;
+
+                strcpy((char *) &msg.payload[msg.payload_size], (const char *) var[i].value_current);
+                msg.payload_size += (strlen((const char *) var[i].value_current) + 1);
+
+                do
+                {
+                    msg_send(&msg);
+                    if ((err = ack_get(&ack)) != LOOKER_EXIT_SUCCESS)
+                        return err;
+                } while (ack != RESPONSE_ACK_SUCCESS);
+            }
+            else
+                var[i].value_update = NOT_UPDATED;
+        }
+        else if (memcmp(var[i].value_old, (const char *) var[i].value_current, var[i].size) != 0)
         {
             var[i].value_update = UPDATED_FROM_MASTER;
 
@@ -348,23 +366,26 @@ void looker_disconnect(void)
 
 looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, looker_style_t style)
 {
-    if ((type == LOOKER_TYPE_STRING) && (label != LOOKER_LABEL_SSID) & (label != LOOKER_LABEL_PASS) && (label != LOOKER_LABEL_DOMAIN))
+    if ((type == LOOKER_TYPE_STRING) && (label != LOOKER_LABEL_SSID) && (label != LOOKER_LABEL_PASS) && (label != LOOKER_LABEL_DOMAIN))
         size = strlen((const char *) addr) + 1;
 
 #ifdef LOOKER_MASTER_SANITY_TEST
     if (var_cnt >= LOOKER_MASTER_VAR_COUNT)
         return LOOKER_EXIT_NO_MEMORY;
 
-    if (type >= LOOKER_TYPE_LAST)
+    if (!name)
+        return LOOKER_EXIT_WRONG_PARAMETER;
+
+    if (strlen(name) + 1 > LOOKER_MASTER_VAR_NAME_SIZE)
         return LOOKER_EXIT_WRONG_PARAMETER;
 
     if (size > LOOKER_MASTER_VAR_VALUE_SIZE)
         return LOOKER_EXIT_WRONG_PARAMETER;
 
-    if ((type >= LOOKER_TYPE_FLOAT_0) && (type <= LOOKER_TYPE_FLOAT_4) && (size != sizeof(float)) && (size != sizeof(double)))
+    if (type >= LOOKER_TYPE_LAST)
         return LOOKER_EXIT_WRONG_PARAMETER;
 
-    if (name && (strlen(name) + 1 > LOOKER_MASTER_VAR_NAME_SIZE))
+    if ((type >= LOOKER_TYPE_FLOAT_0) && (type <= LOOKER_TYPE_FLOAT_4) && (size != sizeof(float)) && (size != sizeof(double)))
         return LOOKER_EXIT_WRONG_PARAMETER;
 
     if (label >= LOOKER_LABEL_LAST)
@@ -387,10 +408,6 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
     }
     else
     {
-        //name is a must
-        if (!name)
-            return LOOKER_EXIT_WRONG_PARAMETER;
-
         //name cannot be duplicated
         for (i=0; i<var_cnt; i++)
             if ((var[i].name) && (!strcmp(var[i].name, name)))
@@ -408,14 +425,17 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
     var = p;
 #endif //LOOKER_MASTER_USE_MALLOC
 
+    var[var_cnt].name = name;
     var[var_cnt].value_current = (void *) addr;
-    var[var_cnt].size = size;
+    if (type == LOOKER_TYPE_STRING)
+        var[var_cnt].size = 0;
+    else
+        var[var_cnt].size = size;
     var[var_cnt].type = type;
     var[var_cnt].label = label;
 #if ((LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE))
     var[var_cnt].style_current = style;
 #endif //((LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE))
-    var[var_cnt].name = name;
     var_cnt++;
 
     return LOOKER_EXIT_SUCCESS;
@@ -503,7 +523,10 @@ looker_exit_t looker_update(void)
                     //value
                     if (var[i].value_update == UPDATED_FROM_MASTER)
                     {
-                        memcpy(var[i].value_old, (const void *) var[i].value_current, var[i].size);
+                        if (var[i].type == LOOKER_TYPE_STRING)
+                            strcpy(var[i].value_old, (const char *) var[i].value_current);
+                        else
+                            memcpy(var[i].value_old, (const void *) var[i].value_current, var[i].size);
 #ifdef DEBUG_UPDATE
                         PRINT("Master updated value\n");
                         PRINT("  name: ");
@@ -519,8 +542,16 @@ looker_exit_t looker_update(void)
                     }
                     else if (var[i].value_update == UPDATED_FROM_SLAVE)
                     {
-                        memcpy(var[i].value_current, var[i].value_slave, var[i].size);
-                        memcpy(var[i].value_old, var[i].value_slave, var[i].size);
+                        if (var[i].type == LOOKER_TYPE_STRING)
+                        {
+                            strcpy(var[i].value_current, (const char *) var[i].value_slave);
+                            strcpy(var[i].value_old, (const char *) var[i].value_slave);
+                        }
+                        else
+                        {
+                            memcpy(var[i].value_current, var[i].value_slave, var[i].size);
+                            memcpy(var[i].value_old, var[i].value_slave, var[i].size);
+                        }
 #ifdef DEBUG_UPDATE
                         PRINT("Slave updated value\n");
                         PRINT("  name: ");
@@ -708,7 +739,10 @@ static looker_exit_t payload_process(msg_t *msg)
     switch ((unsigned char) msg->payload[0]) {
         case RESPONSE_VALUE:
             var[msg->payload[1]].value_update = UPDATED_FROM_SLAVE;
-            memcpy(var[msg->payload[1]].value_slave, &msg->payload[2], var[msg->payload[1]].size);
+            if (var[msg->payload[1]].type == LOOKER_TYPE_STRING)
+                strcpy(var[msg->payload[1]].value_slave, (const char *) &msg->payload[2]);
+            else
+                memcpy(var[msg->payload[1]].value_slave, &msg->payload[2], var[msg->payload[1]].size);
         break;
 
         case RESPONSE_VALUE_NO_MORE:

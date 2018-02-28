@@ -4,7 +4,7 @@ git reset --hard
 git pull
 if [ -e ~/wifi.h ]
 then
-	cp -f ~/wifi.h src/looker_common
+	find . -name wifi.h -type f -execdir sh -c 'cp -f ~/wifi.h wifi.h' \;
 fi
 echo "Done"
 

@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 
     STAT(looker_reg("i", &i, sizeof(i), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style));
     STAT(looker_reg("j", &j, sizeof(j), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, &style));
-    STAT(looker_reg("k", &k, sizeof(k), LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, &style));
+    STAT(looker_reg("k", &k, 0, LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, &style));
 
     STAT(looker_reg("looker_debug", &looker_debug, sizeof(looker_debug), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, &style));
 

@@ -60,31 +60,31 @@ void msg_decode(msg_t *msg, unsigned char in)
             PRINT("  type: ");
             switch (msg->payload[i++]) {
                 case LOOKER_TYPE_INT:
-                    PRINT("int\n");
+                    PRINT("LOOKER_TYPE_INT\n");
                 break;
                 case LOOKER_TYPE_UINT:
-                    PRINT("uint\n");
+                    PRINT("LOOKER_TYPE_UINT\n");
                 break;
                 case LOOKER_TYPE_FLOAT_0:
-                    PRINT("float_0\n");
+                    PRINT("LOOKER_TYPE_FLOAT_0\n");
                 break;
                 case LOOKER_TYPE_FLOAT_1:
-                    PRINT("float_1\n");
+                    PRINT("LOOKER_TYPE_FLOAT_1\n");
                 break;
                 case LOOKER_TYPE_FLOAT_2:
-                    PRINT("float_2\n");
+                    PRINT("LOOKER_TYPE_FLOAT_2\n");
                 break;
                 case LOOKER_TYPE_FLOAT_3:
-                    PRINT("float_3\n");
+                    PRINT("LOOKER_TYPE_FLOAT_3\n");
                 break;
                 case LOOKER_TYPE_FLOAT_4:
-                    PRINT("float_4\n");
+                    PRINT("LOOKER_TYPE_FLOAT_4\n");
                 break;
                 case LOOKER_TYPE_STRING:
-                    PRINT("string\n");
+                    PRINT("LOOKER_TYPE_STRING\n");
                 break;
                 default:
-                    PRINT("unknown !!!\n");
+                    PRINT("Unknown !!!\n");
                 break;
             }
 
@@ -104,28 +104,28 @@ void msg_decode(msg_t *msg, unsigned char in)
             PRINT("  label: ");
             switch (msg->payload[i++]) {
                 case LOOKER_LABEL_SSID:
-                    PRINT("ssid\n");
+                    PRINT("LOOKER_LABEL_SSID\n");
                 break;
                 case LOOKER_LABEL_PASS:
-                    PRINT("pass\n");
+                    PRINT("LOOKER_LABEL_PASS\n");
                 break;
                 case LOOKER_LABEL_DOMAIN:
-                    PRINT("domain\n");
+                    PRINT("LOOKER_LABEL_DOMAIN\n");
                 break;
                 case LOOKER_LABEL_CHECKBOX:
-                    PRINT("checkbox\n");
+                    PRINT("LOOKER_LABEL_CHECKBOX\n");
                 break;
                 case LOOKER_LABEL_CHECKBOX_INV:
-                    PRINT("checkbox_inv\n");
+                    PRINT("LOOKER_LABEL_CHECKBOX_INV\n");
                 break;
                 case LOOKER_LABEL_VIEW:
-                    PRINT("view\n");
+                    PRINT("LOOKER_LABEL_VIEW\n");
                 break;
                 case LOOKER_LABEL_EDIT:
-                    PRINT("edit\n");
+                    PRINT("LOOKER_LABEL_EDIT\n");
                 break;
                 default:
-                    PRINT("unknown !!!\n");
+                    PRINT("Unknown !!!\n");
                 break;
             }
         }

@@ -222,23 +222,26 @@ looker_exit_t looker_connect(const char *ssid, const char *pass, const char *dom
 
 looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, looker_style_t style)
 {
-    if ((type == LOOKER_TYPE_STRING) && (label != LOOKER_LABEL_SSID) & (label != LOOKER_LABEL_PASS) && (label != LOOKER_LABEL_DOMAIN))
+    if ((type == LOOKER_TYPE_STRING) && (label != LOOKER_LABEL_SSID) && (label != LOOKER_LABEL_PASS) && (label != LOOKER_LABEL_DOMAIN))
         size = strlen((const char *) addr) + 1;
 
 #ifdef LOOKER_SLAVE_SANITY_TEST
     if (var_cnt >= LOOKER_SLAVE_VAR_COUNT)
         return LOOKER_EXIT_NO_MEMORY;
 
-    if (type >= LOOKER_TYPE_LAST)
+    if (!name)
+        return LOOKER_EXIT_WRONG_PARAMETER;
+
+    if (strlen(name) + 1 > LOOKER_SLAVE_VAR_NAME_SIZE)
         return LOOKER_EXIT_WRONG_PARAMETER;
 
     if (size > LOOKER_SLAVE_VAR_VALUE_SIZE)
         return LOOKER_EXIT_WRONG_PARAMETER;
 
-    if ((type >= LOOKER_TYPE_FLOAT_0) && (type <= LOOKER_TYPE_FLOAT_4) && (size != sizeof(float)) && (size != sizeof(double)))
+    if (type >= LOOKER_TYPE_LAST)
         return LOOKER_EXIT_WRONG_PARAMETER;
 
-    if (name && (strlen(name) + 1 > LOOKER_SLAVE_VAR_NAME_SIZE))
+    if ((type >= LOOKER_TYPE_FLOAT_0) && (type <= LOOKER_TYPE_FLOAT_4) && (size != sizeof(float)) && (size != sizeof(double)))
         return LOOKER_EXIT_WRONG_PARAMETER;
 
     if (label >= LOOKER_LABEL_LAST)
@@ -260,10 +263,6 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
     }
     else
     {
-        //name is a must
-        if (!name)
-            return LOOKER_EXIT_WRONG_PARAMETER;
-
         //name cannot be duplicated
         for (i=0; i<var_cnt; i++)
             if ((var[i].name) && (!strcmp(var[i].name, name)))
@@ -283,15 +282,17 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
     pointers_update();
 #endif //LOOKER_SLAVE_USE_MALLOC
 
+    var[var_cnt].name = name;
     var[var_cnt].value_current = (void *) addr;
-    var[var_cnt].size = size;
+    if (type == LOOKER_TYPE_STRING)
+        var[var_cnt].size = 0;
+    else
+        var[var_cnt].size = size;
     var[var_cnt].type = type;
     var[var_cnt].label = label;
 #if ((LOOKER_SLAVE_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE))
     var[var_cnt].style_current = style;
 #endif //((LOOKER_SLAVE_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE))
-
-    var[var_cnt].name = name;
 
     //set up looker_debug pointer
     //in combo mode ssid, pass and domain are already set up in connect function
@@ -764,8 +765,17 @@ looker_exit_t master_var_set(size_t i)
 
     msg_begin(&msg, RESPONSE_VALUE);
     msg.payload[msg.payload_size++] = i;
-    memcpy(&msg.payload[msg.payload_size], var[i].value_current, var[i].size);
-    msg.payload_size += var[i].size;
+
+    if (var[i].type == LOOKER_TYPE_STRING)
+    {
+        strcpy((char *) &msg.payload[msg.payload_size], (const char *) var[i].value_current);
+        msg.payload_size += (strlen((const char *) var[i].value_current) + 1);
+    }
+    else
+    {
+        memcpy(&msg.payload[msg.payload_size], var[i].value_current, var[i].size);
+        msg.payload_size += var[i].size;
+    }
     msg_send(&msg);
 #endif //LOOKER_COMBO
     return LOOKER_EXIT_SUCCESS;
@@ -876,7 +886,6 @@ unsigned char var_replace(const char *var_name, const char *var_value)
             if (strcmp((char *) var[i].value_current, var_value) != 0)
             {
                 strcpy((char *) var[i].value_current, var_value);
-                var[i].size = strlen((char *) var[i].value_current) + 1;
                 master_var_set(i);
                 return 1;
             }
@@ -1005,7 +1014,10 @@ static looker_exit_t payload_process(msg_t *msg)
         break;
 
         case COMMAND_VALUE_SET:
-            memcpy(var[msg->payload[1]].value_current, &msg->payload[2], var[msg->payload[1]].size);
+            if (var[msg->payload[1]].type == LOOKER_TYPE_STRING)
+                strcpy(var[msg->payload[1]].value_current, (const char *) &msg->payload[2]);
+            else
+                memcpy(var[msg->payload[1]].value_current, &msg->payload[2], var[msg->payload[1]].size);
             stat_ms_updates++;
             ack_send(RESPONSE_ACK_SUCCESS);
         break;
