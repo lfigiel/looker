@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
     char text[] = "315,000 MHz";
     const char *style = DEFAULT_STYLE;
 
-	if (looker_reg("F", &text, sizeof(text), LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, &style))
+	if (looker_reg("F", &text, 0, LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, &style))
         printf("Error\n");
 
     while (1) {

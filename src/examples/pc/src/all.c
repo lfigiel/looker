@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 	if ((err = looker_reg("var4", &var4, sizeof(var4), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX_INV, NULL)))
         printf("Error: %d\n", err);
 
-	if ((err = looker_reg("var5", (void *) var5, strlen(var5), LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, NULL)))
+	if ((err = looker_reg("var5", (void *) var5, 0, LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, NULL)))
         printf("Error: %d\n", err);
 
 	if ((err = looker_reg("var6", &var6, sizeof(var6), LOOKER_TYPE_INT, LOOKER_LABEL_VIEW, NULL)))
