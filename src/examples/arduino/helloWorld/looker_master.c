@@ -227,6 +227,10 @@ static looker_exit_t slave_var_set(void)
         //value
         if (var[i].type == LOOKER_TYPE_STRING)
         {
+#ifdef LOOKER_MASTER_SANITY_TEST
+            if ((strlen((const char *) var[i].value_current) + 1) > LOOKER_MASTER_VAR_VALUE_SIZE)
+                return LOOKER_EXIT_NO_MEMORY;
+#endif //LOOKER_MASTER_SANITY_TEST
             if (strcmp(var[i].value_old, (const char *) var[i].value_current) != 0)
             {
                 var[i].value_update = UPDATED_FROM_MASTER;
@@ -377,10 +381,10 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
         return LOOKER_EXIT_WRONG_PARAMETER;
 
     if (strlen(name) + 1 > LOOKER_MASTER_VAR_NAME_SIZE)
-        return LOOKER_EXIT_WRONG_PARAMETER;
+        return LOOKER_EXIT_NO_MEMORY;
 
     if (size > LOOKER_MASTER_VAR_VALUE_SIZE)
-        return LOOKER_EXIT_WRONG_PARAMETER;
+        return LOOKER_EXIT_NO_MEMORY;
 
     if (type >= LOOKER_TYPE_LAST)
         return LOOKER_EXIT_WRONG_PARAMETER;
@@ -450,7 +454,7 @@ looker_exit_t looker_update(void)
     switch (master_state) {
         case MASTER_STATE_RESET:
             PRINT("Master state: MASTER_STATE_RESET\n");
-            //postpond
+            //re-connection takes time so reset does not disrupt connection
             j = 0;
             while (++j < RESET_POSTPOND)
                 looker_delay_1ms();
@@ -738,11 +742,17 @@ static looker_exit_t payload_process(msg_t *msg)
 {
     switch ((unsigned char) msg->payload[0]) {
         case RESPONSE_VALUE:
-            var[msg->payload[1]].value_update = UPDATED_FROM_SLAVE;
             if (var[msg->payload[1]].type == LOOKER_TYPE_STRING)
+            {
+#ifdef LOOKER_MASTER_SANITY_TEST
+                if ((strlen((const char *) &msg->payload[2]) + 1 ) > LOOKER_MASTER_VAR_VALUE_SIZE)
+                    return LOOKER_EXIT_NO_MEMORY;
+#endif //LOOKER_MASTER_SANITY_TEST
                 strcpy(var[msg->payload[1]].value_slave, (const char *) &msg->payload[2]);
+            }
             else
                 memcpy(var[msg->payload[1]].value_slave, &msg->payload[2], var[msg->payload[1]].size);
+            var[msg->payload[1]].value_update = UPDATED_FROM_SLAVE;
         break;
 
         case RESPONSE_VALUE_NO_MORE:

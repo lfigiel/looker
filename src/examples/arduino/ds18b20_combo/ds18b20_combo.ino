@@ -885,9 +885,15 @@ unsigned char var_replace(const char *var_name, const char *var_value)
         case LOOKER_TYPE_STRING:
             if (strcmp((char *) var[i].value_current, var_value) != 0)
             {
-                strcpy((char *) var[i].value_current, var_value);
-                master_var_set(i);
-                return 1;
+#ifdef LOOKER_SLAVE_SANITY_TEST
+//todo: LOOKER_SLAVE_VAR_VALUE_SIZE might be still > than LOOKER_MASTER_VAR_VALUE_SIZE
+                if ((strlen(var_value) + 1) <= LOOKER_SLAVE_VAR_VALUE_SIZE)
+#endif //LOOKER_SLAVE_SANITY_TEST
+                {
+                    strcpy((char *) var[i].value_current, var_value);
+                    master_var_set(i);
+                    return 1;
+                }
             }
         break;
         default:
@@ -961,6 +967,7 @@ static looker_exit_t payload_process(msg_t *msg)
 
     switch (msg->payload[0]) {
         case COMMAND_RESET:
+            //re-connection takes time so reset does not disrupt connection
             rebooted = 0;
             var_cnt = 0;
 #ifdef LOOKER_SLAVE_USE_MALLOC
@@ -972,10 +979,6 @@ static looker_exit_t payload_process(msg_t *msg)
 #endif //LOOKER_SLAVE_USE_MALLOC
             looker_debug_show = NULL;
 
-            if (WiFi.status() == WL_CONNECTED)
-                slave_state = LOOKER_SLAVE_STATE_CONNECTED;
-            else
-                slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
             server_arg = -1;
             stat_s_resets++;
             ack_send(RESPONSE_ACK_SUCCESS);

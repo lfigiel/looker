@@ -8,7 +8,7 @@ extern "C" {
 
 #include "looker_common.h"
 
-#define MSG_TIMEOUT 1000    //ms
+#define MSG_TIMEOUT 2000    //ms
 
 typedef enum {
     COMMAND_RESET,

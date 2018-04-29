@@ -227,7 +227,7 @@ looker_exit_t ack_get(unsigned char *ack)
             return LOOKER_EXIT_SUCCESS;
         }
     }
-    return LOOKER_EXIT_WRONG_RESPONSE;
+    return err;
 }
 
 void ack_send(unsigned char ack)
