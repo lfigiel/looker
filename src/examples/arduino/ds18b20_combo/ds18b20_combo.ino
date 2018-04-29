@@ -82,7 +82,7 @@ looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
 #else
     static var_t var[LOOKER_SLAVE_VAR_COUNT];
 #endif //LOOKER_SLAVE_USE_MALLOC
-size_t var_cnt;      //total variables count
+size_t slave_var_cnt;    //number of variables in slave's db
 unsigned char http_request;
 int server_arg = -1;
 unsigned char *looker_debug_show = NULL;
@@ -146,7 +146,7 @@ static void pointers_update(void);
 void pointers_update(void)
 {
     size_t i;
-    for (i=0; i<var_cnt; i++)
+    for (i=0; i<slave_var_cnt; i++)
     {
         switch (var[i].label) {
             case LOOKER_LABEL_SSID:
@@ -190,7 +190,7 @@ looker_exit_t network_connect(const char *ssid, const char *pass)
 void looker_init(void)
 {
     //reset master
-    var_cnt = 0;
+    slave_var_cnt = 0;
     network_ssid = NULL;
     network_pass = NULL;
     network_domain = NULL;
@@ -226,7 +226,7 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
         size = strlen((const char *) addr) + 1;
 
 #ifdef LOOKER_SLAVE_SANITY_TEST
-    if (var_cnt >= LOOKER_SLAVE_VAR_COUNT)
+    if (slave_var_cnt >= LOOKER_SLAVE_VAR_COUNT)
         return LOOKER_EXIT_NO_MEMORY;
 
     if (!name)
@@ -264,7 +264,7 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
     else
     {
         //name cannot be duplicated
-        for (i=0; i<var_cnt; i++)
+        for (i=0; i<slave_var_cnt; i++)
             if ((var[i].name) && (!strcmp(var[i].name, name)))
                 return LOOKER_EXIT_WRONG_PARAMETER;
     }
@@ -272,7 +272,7 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
 
 #ifdef LOOKER_SLAVE_USE_MALLOC
     var_t *p;
-    if ((p = (var_t *) realloc(var, (size_t) ((var_cnt + 1) * sizeof(var_t)))) == NULL)
+    if ((p = (var_t *) realloc(var, (size_t) ((slave_var_cnt + 1) * sizeof(var_t)))) == NULL)
     {
         //looker_destroy() will free old memory block pointed by var
         return LOOKER_EXIT_NO_MEMORY;
@@ -282,24 +282,24 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
     pointers_update();
 #endif //LOOKER_SLAVE_USE_MALLOC
 
-    var[var_cnt].name = name;
-    var[var_cnt].value_current = (void *) addr;
+    var[slave_var_cnt].name = name;
+    var[slave_var_cnt].value_current = (void *) addr;
     if (type == LOOKER_TYPE_STRING)
-        var[var_cnt].size = 0;
+        var[slave_var_cnt].size = 0;
     else
-        var[var_cnt].size = size;
-    var[var_cnt].type = type;
-    var[var_cnt].label = label;
+        var[slave_var_cnt].size = size;
+    var[slave_var_cnt].type = type;
+    var[slave_var_cnt].label = label;
 #if ((LOOKER_SLAVE_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE))
-    var[var_cnt].style_current = style;
+    var[slave_var_cnt].style_current = style;
 #endif //((LOOKER_SLAVE_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE))
 
     //set up looker_debug pointer
     //in combo mode ssid, pass and domain are already set up in connect function
-    if (!strcmp(var[var_cnt].name, "looker_debug"))
-        looker_debug_show = (unsigned char *) var[var_cnt].value_current;
+    if (!strcmp(var[slave_var_cnt].name, "looker_debug"))
+        looker_debug_show = (unsigned char *) var[slave_var_cnt].value_current;
 
-    var_cnt++;
+    slave_var_cnt++;
 
     return LOOKER_EXIT_SUCCESS;
 }
@@ -433,7 +433,7 @@ void json_print(void)
     char value_text[(LOOKER_SLAVE_VAR_VALUE_SIZE > 20) ? (LOOKER_SLAVE_VAR_VALUE_SIZE + 1) : (20 + 1)]; //20 is the length of max 64-bit number
     size_t i;
 
-    for (i=0; i<var_cnt; i++)
+    for (i=0; i<slave_var_cnt; i++)
     {
         //skip some vars
         if ((var[i].label == LOOKER_LABEL_SSID) || (var[i].label == LOOKER_LABEL_PASS) || (var[i].label == LOOKER_LABEL_DOMAIN))
@@ -525,7 +525,7 @@ void html_print(void)
         webString += "        <form method='post'>\n";
         webString += "            <br>\n";
 
-        for (int i=0; i<var_cnt; i++)
+        for (int i=0; i<slave_var_cnt; i++)
         {
             unsigned long long value_int = 0;
             char value_text[(LOOKER_SLAVE_VAR_VALUE_SIZE > 20) ? (LOOKER_SLAVE_VAR_VALUE_SIZE + 1) : (20 + 1)]; //20 is the length of max 64-bit number
@@ -667,7 +667,7 @@ void html_print(void)
             webString += "</p>\n";
         }
 
-        if (!var_cnt)
+        if (!slave_var_cnt)
             webString += "No Variables<br>\n";
         else
             webString += "            <br><input type='submit' value='Submit'><br>\n";
@@ -781,17 +781,22 @@ looker_exit_t master_var_set(size_t i)
     return LOOKER_EXIT_SUCCESS;
 }
 
+//find and replace variable
+//web server -> slave -> master
+//return:
+//0 - could not find
+//1 - found and replaced
 unsigned char var_replace(const char *var_name, const char *var_value)
 {
-    if (!var_cnt)
+    if (!slave_var_cnt)
         return 0;
 
     //find
     int i = 0;
-    while ((i < var_cnt) && (strcmp(var[i].name, var_name) != 0))
+    while ((i < slave_var_cnt) && (strcmp(var[i].name, var_name) != 0))
         i++;
 
-    if (i == var_cnt)
+    if (i == slave_var_cnt)
         return 0;
 
     //replace if different
@@ -908,17 +913,17 @@ static looker_exit_t register_process(msg_t *msg)
     size_t i = 1;
 
     //only new variable
-    if (msg->payload[i++] != var_cnt)
+    if (msg->payload[i++] != slave_var_cnt)
         return LOOKER_EXIT_WRONG_PARAMETER;
 
 #ifdef LOOKER_SLAVE_SANITY_TEST
-    if (var_cnt >= LOOKER_SLAVE_VAR_COUNT)
+    if (slave_var_cnt >= LOOKER_SLAVE_VAR_COUNT)
         return LOOKER_EXIT_NO_MEMORY;
 #endif //LOOKER_SLAVE_SANITY_TEST
 
 #ifdef LOOKER_SLAVE_USE_MALLOC
     var_t *p;
-    if ((p = (var_t *) realloc(var, (size_t) ((var_cnt + 1) * sizeof(var_t)))) == NULL)
+    if ((p = (var_t *) realloc(var, (size_t) ((slave_var_cnt + 1) * sizeof(var_t)))) == NULL)
     {
         //looker_destroy() will free old memory block pointed by var
         return LOOKER_EXIT_NO_MEMORY;
@@ -928,37 +933,38 @@ static looker_exit_t register_process(msg_t *msg)
     pointers_update();
 #endif //LOOKER_SLAVE_USE_MALLOC
 
-    var[var_cnt].size = msg->payload[i++];
-    var[var_cnt].type = msg->payload[i++];
+    var[slave_var_cnt].size = msg->payload[i++];
+    var[slave_var_cnt].type = msg->payload[i++];
 
     //reset value
     //value will be transferred (unless it is zero) during update not register
-    if (var[var_cnt].type == LOOKER_TYPE_STRING)
-        var[var_cnt].value_current[0] = 0;
+    if (var[slave_var_cnt].type == LOOKER_TYPE_STRING)
+        var[slave_var_cnt].value_current[0] = 0;
     else
-        memset(var[var_cnt].value_current, 0, var[var_cnt].size);
+        memset(var[slave_var_cnt].value_current, 0, var[slave_var_cnt].size);
 
-    strcpy(var[var_cnt].name, (char *) &msg->payload[i]);
-    i += strlen(var[var_cnt].name) + 1;
+    strcpy(var[slave_var_cnt].name, (char *) &msg->payload[i]);
+    i += strlen(var[slave_var_cnt].name) + 1;
 
-    var[var_cnt].label = (looker_label_t) msg->payload[i++];
+    var[slave_var_cnt].label = (looker_label_t) msg->payload[i++];
 
     //reset style
-    var[var_cnt].style_current[0] = 0;
+    var[slave_var_cnt].style_current[0] = 0;
 
     //set up ssid, pass, domain and looker_debug pointers
-    if (var[var_cnt].label == LOOKER_LABEL_SSID)
-        network_ssid = (char *) &var[var_cnt].name;
-    else if (var[var_cnt].label == LOOKER_LABEL_PASS)
-        network_pass = (char *) &var[var_cnt].name;
-    if (var[var_cnt].label == LOOKER_LABEL_DOMAIN)
-        network_domain = (char *) &var[var_cnt].name;
-    if (!strcmp(var[var_cnt].name, "looker_debug"))
-        looker_debug_show = (unsigned char *) &var[var_cnt].value_current;
+    if (var[slave_var_cnt].label == LOOKER_LABEL_SSID)
+        network_ssid = (char *) &var[slave_var_cnt].name;
+    else if (var[slave_var_cnt].label == LOOKER_LABEL_PASS)
+        network_pass = (char *) &var[slave_var_cnt].name;
+    if (var[slave_var_cnt].label == LOOKER_LABEL_DOMAIN)
+        network_domain = (char *) &var[slave_var_cnt].name;
+    if (!strcmp(var[slave_var_cnt].name, "looker_debug"))
+        looker_debug_show = (unsigned char *) &var[slave_var_cnt].value_current;
 
-    var_cnt++;
+    slave_var_cnt++;
 }
 
+//master -> slave
 static looker_exit_t payload_process(msg_t *msg)
 {
     size_t i, j;
@@ -969,7 +975,7 @@ static looker_exit_t payload_process(msg_t *msg)
         case COMMAND_RESET:
             //re-connection takes time so reset does not disrupt connection
             rebooted = 0;
-            var_cnt = 0;
+            slave_var_cnt = 0;
 #ifdef LOOKER_SLAVE_USE_MALLOC
             if (var)
             {
@@ -1012,15 +1018,22 @@ static looker_exit_t payload_process(msg_t *msg)
 
         case COMMAND_VAR_REG:
             register_process(msg);
+//todo: report exit code to master
             stat_ms_updates++;
             ack_send(RESPONSE_ACK_SUCCESS);
         break;
 
         case COMMAND_VALUE_SET:
             if (var[msg->payload[1]].type == LOOKER_TYPE_STRING)
-                strcpy(var[msg->payload[1]].value_current, (const char *) &msg->payload[2]);
+            {
+#ifdef LOOKER_SLAVE_SANITY_TEST
+                if ((strlen((const char *) &msg->payload[2]) + 1 ) <= LOOKER_SLAVE_VAR_VALUE_SIZE)
+#endif //LOOKER_SLAVE_SANITY_TEST
+                    strcpy(var[msg->payload[1]].value_current, (const char *) &msg->payload[2]);
+            }
             else
                 memcpy(var[msg->payload[1]].value_current, &msg->payload[2], var[msg->payload[1]].size);
+//todo: report exit code to master
             stat_ms_updates++;
             ack_send(RESPONSE_ACK_SUCCESS);
         break;

@@ -73,8 +73,8 @@ static var_t *var = NULL;
 #else
 static var_t var[LOOKER_MASTER_VAR_COUNT];
 #endif //LOOKER_MASTER_USE_MALLOC
-static size_t var_cnt;      //total variables count
-static size_t var_reg_cnt;  //total variables registered
+static size_t master_var_cnt;   //number of variables in master's db
+static size_t slave_var_cnt;    //number of variables in slave's db
 static looker_network_t network = LOOKER_NETWORK_DO_NOTHING;
 static msg_t msg;
 
@@ -128,6 +128,7 @@ static looker_exit_t slave_status_get(void)
     return payload_process(&msg);
 }
 
+//update master's db
 static looker_exit_t slave_var_get(void)
 {
     msg_t msg;
@@ -172,9 +173,9 @@ static looker_exit_t slave_var_reg(void)
     unsigned char ack;
     looker_exit_t err;
 
-    while (var_cnt > var_reg_cnt)
+    while (master_var_cnt > slave_var_cnt)
     {
-        size_t i = var_reg_cnt;
+        size_t i = slave_var_cnt;
         msg_begin(&msg, COMMAND_VAR_REG);
 
         msg.payload[msg.payload_size++] = i;
@@ -207,18 +208,19 @@ static looker_exit_t slave_var_reg(void)
         //reset style_old
         var[i].style_old = NULL;
 #endif //LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED
-        var_reg_cnt++;
+        slave_var_cnt++;
     }
     return LOOKER_EXIT_SUCCESS;
 }
 
+//update slave's db
 static looker_exit_t slave_var_set(void)
 {
     size_t i;
     unsigned char ack;
     looker_exit_t err;
 
-    for (i=0; i<var_cnt; i++)
+    for (i=0; i<master_var_cnt; i++)
     {
         //skip some vars
         if ((var[i].label == LOOKER_LABEL_SSID) || (var[i].label == LOOKER_LABEL_PASS) || (var[i].label == LOOKER_LABEL_DOMAIN))
@@ -325,8 +327,8 @@ static looker_exit_t slave_var_set(void)
 void looker_init(void)
 {
     //reset master
-    var_cnt = 0;
-    var_reg_cnt = 0;
+    master_var_cnt = 0;
+    slave_var_cnt = 0;
 
     //this will also reset slave vars through COMMAND_RESET
     master_state_change(MASTER_STATE_RESET);
@@ -368,13 +370,14 @@ void looker_disconnect(void)
     network = LOOKER_NETWORK_STAY_DISCONNECTED;
 }
 
+//register variable in master's db
 looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, looker_style_t style)
 {
     if ((type == LOOKER_TYPE_STRING) && (label != LOOKER_LABEL_SSID) && (label != LOOKER_LABEL_PASS) && (label != LOOKER_LABEL_DOMAIN))
         size = strlen((const char *) addr) + 1;
 
 #ifdef LOOKER_MASTER_SANITY_TEST
-    if (var_cnt >= LOOKER_MASTER_VAR_COUNT)
+    if (master_var_cnt >= LOOKER_MASTER_VAR_COUNT)
         return LOOKER_EXIT_NO_MEMORY;
 
     if (!name)
@@ -406,14 +409,14 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
     //one ssid, one pass, one domain
     if ((label == LOOKER_LABEL_SSID) || (label == LOOKER_LABEL_PASS) || (label == LOOKER_LABEL_DOMAIN))
     {
-        for (i=0; i<var_cnt; i++)
+        for (i=0; i<master_var_cnt; i++)
             if (var[i].label == label)
                 return LOOKER_EXIT_WRONG_PARAMETER;
     }
     else
     {
         //name cannot be duplicated
-        for (i=0; i<var_cnt; i++)
+        for (i=0; i<master_var_cnt; i++)
             if ((var[i].name) && (!strcmp(var[i].name, name)))
                 return LOOKER_EXIT_WRONG_PARAMETER;
     }
@@ -421,7 +424,7 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
 
 #ifdef LOOKER_MASTER_USE_MALLOC
     var_t *p;
-    if ((p = (var_t *) realloc(var, (size_t) ((var_cnt + 1) * sizeof(var_t)))) == NULL)
+    if ((p = (var_t *) realloc(var, (size_t) ((master_var_cnt + 1) * sizeof(var_t)))) == NULL)
     {
         //looker_destroy() will free old memory block pointed by var 
         return LOOKER_EXIT_NO_MEMORY;
@@ -429,18 +432,18 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
     var = p;
 #endif //LOOKER_MASTER_USE_MALLOC
 
-    var[var_cnt].name = name;
-    var[var_cnt].value_current = (void *) addr;
+    var[master_var_cnt].name = name;
+    var[master_var_cnt].value_current = (void *) addr;
     if (type == LOOKER_TYPE_STRING)
-        var[var_cnt].size = 0;
+        var[master_var_cnt].size = 0;
     else
-        var[var_cnt].size = size;
-    var[var_cnt].type = type;
-    var[var_cnt].label = label;
+        var[master_var_cnt].size = size;
+    var[master_var_cnt].type = type;
+    var[master_var_cnt].label = label;
 #if ((LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE))
-    var[var_cnt].style_current = style;
+    var[master_var_cnt].style_current = style;
 #endif //((LOOKER_MASTER_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_MASTER_STYLE == LOOKER_STYLE_VARIABLE))
-    var_cnt++;
+    master_var_cnt++;
 
     return LOOKER_EXIT_SUCCESS;
 }
@@ -478,8 +481,9 @@ looker_exit_t looker_update(void)
                     master_state_change(MASTER_STATE_RESET);
                     return err;
                 }
+
                 //reset variables here
-                var_reg_cnt = 0;
+                slave_var_cnt = 0;
                 master_state_change(MASTER_STATE_SYNC);
             }
             else
@@ -507,14 +511,14 @@ looker_exit_t looker_update(void)
             //only if slave is connected
             if (slave_state == LOOKER_SLAVE_STATE_CONNECTED)
             {
-                //update slave
+                //update slave's db
                 if ((err = slave_var_set()) != LOOKER_EXIT_SUCCESS)
                 {
                     master_state_change(MASTER_STATE_RESET);
                     return err;
                 }
 
-                //update master
+                //update master's db
                 if ((err = slave_var_get()) != LOOKER_EXIT_SUCCESS)
                 {
                     master_state_change(MASTER_STATE_RESET);
@@ -522,7 +526,7 @@ looker_exit_t looker_update(void)
                 }
 
                 //validate
-                for (i=0; i<var_cnt; i++)
+                for (i=0; i<master_var_cnt; i++)
                 {
                     //value
                     if (var[i].value_update == UPDATED_FROM_MASTER)
@@ -738,6 +742,7 @@ looker_exit_t looker_update(void)
     return LOOKER_EXIT_SUCCESS;
 }
 
+//slave -> master
 static looker_exit_t payload_process(msg_t *msg)
 {
     switch ((unsigned char) msg->payload[0]) {
