@@ -6,7 +6,7 @@ Copyright (c) 2018 Lukasz Figiel
 #define LOOKER_COMMON_H
 
 //master and slave together in one device
-//#define LOOKER_COMBO
+#define LOOKER_COMBO
 
 #define LOOKER_VAR_FLOAT LOOKER_VAR_FLOAT_1
 
