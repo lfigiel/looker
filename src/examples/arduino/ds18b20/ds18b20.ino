@@ -4,7 +4,7 @@
 #include "looker_stubs.h"
 #include "wifi.h"
 
-#define LOOKER_DOMAIN "arduino"
+#define LOOKER_DOMAIN "temp"
 
 // Data wire is plugged into pin 2 on the Arduino
 #define ONE_WIRE_BUS 2

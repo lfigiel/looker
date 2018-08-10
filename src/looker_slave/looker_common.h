@@ -8,7 +8,7 @@ Copyright (c) 2018 Lukasz Figiel
 //master and slave together in one device
 //#define LOOKER_COMBO
 
-#define LOOKER_VAR_FLOAT LOOKER_VAR_FLOAT_1
+#define LOOKER_TYPE_FLOAT LOOKER_TYPE_FLOAT_1
 
 //this is common for master and slave, master stores only pointer to style
 #define LOOKER_VAR_STYLE_SIZE (LOOKER_MSG_PAYLOAD_SIZE - 2) //command, var_index
@@ -77,12 +77,13 @@ typedef enum {
 } looker_slave_state_t;
 
 typedef enum {
-    LOOKER_NETWORK_DO_NOTHING = 0,
-    LOOKER_NETWORK_STAY_CONNECTED,
-    LOOKER_NETWORK_STAY_DISCONNECTED,
-    LOOKER_NETWORK_RECONNECT,      //phase one - from any state to disconnected
-    LOOKER_NETWORK_RECONNECT_2     //phase two - from disconnected to connected
-} looker_network_t;
+    LOOKER_SLAVE_STATE_TASK_DO_NOTHING = 0,
+    LOOKER_SLAVE_STATE_TASK_CONNECT,
+    LOOKER_SLAVE_STATE_TASK_DISCONNECT,
+    LOOKER_SLAVE_STATE_TASK_RECONNECT,
+
+    LOOKER_SLAVE_STATE_TASK_LAST
+} looker_slave_state_task_t;
 
 #endif //LOOKER_COMMON_H
 

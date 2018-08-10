@@ -8,7 +8,7 @@ extern "C" {
 
 #include "looker_common.h"
 
-#define LOOKER_MASTER_USE_MALLOC
+//#define LOOKER_MASTER_USE_MALLOC
 #define LOOKER_MASTER_VAR_COUNT 16
 #define LOOKER_MASTER_VAR_NAME_SIZE (LOOKER_MSG_PAYLOAD_SIZE - 5) //command, var_index, var_size, var_type, var_label
 #define LOOKER_MASTER_VAR_VALUE_SIZE 16

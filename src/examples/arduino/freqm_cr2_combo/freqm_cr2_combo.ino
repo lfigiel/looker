@@ -114,7 +114,7 @@ size_t ticker_cnt;
 const char *network_ssid = NULL;
 const char *network_pass = NULL;
 const char *network_domain = NULL;
-looker_network_t network = LOOKER_NETWORK_DO_NOTHING;
+looker_slave_state_task_t slave_state_task = LOOKER_SLAVE_STATE_TASK_DO_NOTHING;
 
 int ledPin = 2; // GPIO2 on ESP8266
 size_t led_cnt, led_timeout;
@@ -215,7 +215,7 @@ looker_exit_t looker_connect(const char *ssid, const char *pass, const char *dom
     network_ssid = ssid;
     network_pass = pass;
     network_domain = domain;
-    network = LOOKER_NETWORK_RECONNECT;
+    slave_state_task = LOOKER_SLAVE_STATE_TASK_RECONNECT;
 
     return LOOKER_EXIT_SUCCESS;
 }
@@ -1002,6 +1002,7 @@ static looker_exit_t payload_process(msg_t *msg)
 
         case COMMAND_DISCONNECT:
             WiFi.disconnect();
+            slave_state = LOOKER_SLAVE_STATE_DISCONNECTING;
             ack_send(RESPONSE_ACK_SUCCESS);
         break;
         
@@ -1220,11 +1221,11 @@ void slave_loop(void)
         }
     }
 #else
-    switch (network) {
-        case LOOKER_NETWORK_DO_NOTHING:
+    switch (slave_state_task) {
+        case LOOKER_SLAVE_STATE_TASK_DO_NOTHING:
         break;
 
-        case LOOKER_NETWORK_STAY_CONNECTED:
+        case LOOKER_SLAVE_STATE_TASK_CONNECT:
             switch (slave_state) {
                 case LOOKER_SLAVE_STATE_CONNECTING:
                     //timeout
@@ -1247,12 +1248,13 @@ void slave_loop(void)
             }
         break;
 
-        case LOOKER_NETWORK_STAY_DISCONNECTED:
+        case LOOKER_SLAVE_STATE_TASK_DISCONNECT:
             switch (slave_state) {
                 case LOOKER_SLAVE_STATE_CONNECTING:
                 case LOOKER_SLAVE_STATE_CONNECTED:
                     //disconnect from the network
                     WiFi.disconnect();
+                    slave_state = LOOKER_SLAVE_STATE_DISCONNECTING;
                 break;
                 case LOOKER_SLAVE_STATE_DISCONNECTING:
                     //timeout
@@ -1265,48 +1267,25 @@ void slave_loop(void)
             }
         break;
 
-        case LOOKER_NETWORK_RECONNECT:
+        case LOOKER_SLAVE_STATE_TASK_RECONNECT:
             switch (slave_state) {
                 case LOOKER_SLAVE_STATE_CONNECTING:
                 case LOOKER_SLAVE_STATE_CONNECTED:
                     //disconnect from the network
                     WiFi.disconnect();
+                    slave_state = LOOKER_SLAVE_STATE_DISCONNECTING;
                 break;
                 case LOOKER_SLAVE_STATE_DISCONNECTING:
                     //timeout
                 break;
                 case LOOKER_SLAVE_STATE_DISCONNECTED:
-                    network = LOOKER_NETWORK_RECONNECT_2;
+                    slave_state_task = LOOKER_SLAVE_STATE_TASK_CONNECT;
                 break;
                 default:
                 break;
             }
         break;
 
-        case LOOKER_NETWORK_RECONNECT_2:
-            switch (slave_state) {
-                case LOOKER_SLAVE_STATE_CONNECTING:
-                    //timeout
-                break;
-                case LOOKER_SLAVE_STATE_CONNECTED:
-                    network = LOOKER_NETWORK_STAY_CONNECTED;
-                break;
-                case LOOKER_SLAVE_STATE_DISCONNECTING:
-                    network = LOOKER_NETWORK_RECONNECT;
-                break;
-                case LOOKER_SLAVE_STATE_DISCONNECTED:
-                    if (slave_state != LOOKER_SLAVE_STATE_CONNECTED)
-                    {
-                        //connect to the network
-                        network_connect(network_ssid, network_pass);
-                        led_period(80);
-                        slave_state = LOOKER_SLAVE_STATE_CONNECTING;
-                    }
-                break;
-                default:
-                break;
-            }
-        break;
         default:
         break;
     }

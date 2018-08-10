@@ -10,21 +10,25 @@ Copyright (c) 2018 Lukasz Figiel
 #include "checksum.h"
 #include "looker_stubs.h"
 
+#define MSG_IN 0
+#define MSG_OUT 1
+
 #ifndef LOOKER_COMBO
     size_t stat_ack_get_failures;
     size_t stat_ack_send_failures;
 #endif //LOOKER_COMBO
 
-void msg_decode(msg_t *msg, unsigned char in)
+#ifdef DEBUG_MSG_DECODE
+void msg_decode(msg_t *msg, unsigned char msg_dir)
 {
-    const char *dir;
-    if (in)
+    char *dir;
+    if (msg_dir == MSG_IN)
     {
-        dir = "<-";
+        dir = "->";
     }
     else
     {
-        dir = "->";
+        dir = "<-";
     }
 
     switch (msg->payload[0]) {
@@ -203,6 +207,7 @@ void msg_decode(msg_t *msg, unsigned char in)
         break;
     }
 }
+#endif //DEBUG_MSG_DECODE
 
 void msg_begin(msg_t *msg, unsigned char control)
 {
@@ -311,7 +316,7 @@ looker_exit_t msg_get(msg_t *msg)
                             PRINTLN2("  msg_get: delay: ", j);
 #endif //DEBUG_MSG_WAIT
 #ifdef DEBUG_MSG_DECODE
-                            msg_decode(msg, 1);
+                            msg_decode(msg, MSG_IN);
 #endif //DEBUG_MSG_DECODE
                             return LOOKER_EXIT_SUCCESS;
                         }
@@ -388,7 +393,7 @@ void msg_send(msg_t *msg)
 #endif //DEBUG_MSG_CHECKSUM
 
 #ifdef DEBUG_MSG_DECODE
-    msg_decode(msg, 0);
+    msg_decode(msg, MSG_OUT);
 #endif //DEBUG_MSG_DECODE
 }
 

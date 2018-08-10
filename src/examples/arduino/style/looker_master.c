@@ -75,7 +75,7 @@ static var_t var[LOOKER_MASTER_VAR_COUNT];
 #endif //LOOKER_MASTER_USE_MALLOC
 static size_t master_var_cnt;   //number of variables in master's db
 static size_t slave_var_cnt;    //number of variables in slave's db
-static looker_network_t network = LOOKER_NETWORK_DO_NOTHING;
+static looker_slave_state_task_t slave_state_task = LOOKER_SLAVE_STATE_TASK_DO_NOTHING;
 static msg_t msg;
 
 //prototypes
@@ -360,14 +360,14 @@ looker_exit_t looker_connect(const char *ssid, const char *pass, const char *dom
             return err;
     }
 
-    network = LOOKER_NETWORK_RECONNECT;
+    slave_state_task = LOOKER_SLAVE_STATE_TASK_RECONNECT;
 
     return LOOKER_EXIT_SUCCESS;
 }
 
 void looker_disconnect(void)
 {
-    network = LOOKER_NETWORK_STAY_DISCONNECTED;
+    slave_state_task = LOOKER_SLAVE_STATE_TASK_DISCONNECT;
 }
 
 //register variable in master's db
@@ -591,39 +591,36 @@ looker_exit_t looker_update(void)
                 }
             }
 
-#ifdef DEBUG_NETWORK
-            PRINT("  network: ");
-            switch (network) {
-                case LOOKER_NETWORK_DO_NOTHING:
-                    PRINT("LOOKER_NETWORK_DO_NOTHING\n");
+#ifdef DEBUG_SLAVE_STATE_TASK
+            PRINT("  slave_state_task: ");
+            switch (slave_state_task) {
+                case LOOKER_SLAVE_STATE_TASK_DO_NOTHING:
+                    PRINT("LOOKER_SLAVE_STATE_TASK_DO_NOTHING\n");
                 break;
 
-                case LOOKER_NETWORK_STAY_CONNECTED:
-                    PRINT("LOOKER_NETWORK_STAY_CONNECTED\n");
+                case LOOKER_SLAVE_STATE_TASK_CONNECT:
+                    PRINT("LOOKER_SLAVE_STATE_TASK_CONNECT\n");
                 break;
 
-                case LOOKER_NETWORK_STAY_DISCONNECTED:
-                    PRINT("LOOKER_NETWORK_STAY_DISCONNECTED\n");
+                case LOOKER_SLAVE_STATE_TASK_DISCONNECT:
+                    PRINT("LOOKER_SLAVE_STATE_TASK_DISCONNECT\n");
                 break;
 
-                case LOOKER_NETWORK_RECONNECT:
-                    PRINT("LOOKER_NETWORK_RECONNECT\n");
+                case LOOKER_SLAVE_STATE_TASK_RECONNECT:
+                    PRINT("LOOKER_SLAVE_STATE_TASK_RECONNECT\n");
                 break;
 
-                case LOOKER_NETWORK_RECONNECT_2:
-                    PRINT("LOOKER_NETWORK_RECONNECT_2\n");
-                break;
                 default:
                 break;
             }
-#endif //DEBUG_NETWORK
+#endif //DEBUG_SLAVE_STATE_TASK
 
 //todo: move to slave
-            switch (network) {
-                case LOOKER_NETWORK_DO_NOTHING:
+            switch (slave_state_task) {
+                case LOOKER_SLAVE_STATE_TASK_DO_NOTHING:
                 break;
 
-                case LOOKER_NETWORK_STAY_CONNECTED:
+                case LOOKER_SLAVE_STATE_TASK_CONNECT:
                     switch (slave_state) {
                         case LOOKER_SLAVE_STATE_CONNECTING:
                             //timeout
@@ -649,7 +646,7 @@ looker_exit_t looker_update(void)
                     }
                 break;
 
-                case LOOKER_NETWORK_STAY_DISCONNECTED:
+                case LOOKER_SLAVE_STATE_TASK_DISCONNECT:
                     switch (slave_state) {
                         case LOOKER_SLAVE_STATE_CONNECTING:
                         case LOOKER_SLAVE_STATE_CONNECTED:
@@ -675,7 +672,7 @@ looker_exit_t looker_update(void)
                     }
                 break;
 
-                case LOOKER_NETWORK_RECONNECT:
+                case LOOKER_SLAVE_STATE_TASK_RECONNECT:
                     switch (slave_state) {
                         case LOOKER_SLAVE_STATE_CONNECTING:
                         case LOOKER_SLAVE_STATE_CONNECTED:
@@ -694,41 +691,17 @@ looker_exit_t looker_update(void)
                             //timeout
                         break;
                         case LOOKER_SLAVE_STATE_DISCONNECTED:
-                            network = LOOKER_NETWORK_RECONNECT_2;
+                            slave_state_task = LOOKER_SLAVE_STATE_TASK_CONNECT;
                         break;
                         default:
                         break;
                     }
                 break;
 
-                case LOOKER_NETWORK_RECONNECT_2:
-                    switch (slave_state) {
-                        case LOOKER_SLAVE_STATE_CONNECTING:
-                            //timeout
-                        break;
-                        case LOOKER_SLAVE_STATE_CONNECTED:
-                            network = LOOKER_NETWORK_STAY_CONNECTED;
-                        break;
-                        case LOOKER_SLAVE_STATE_DISCONNECTING:
-                            network = LOOKER_NETWORK_RECONNECT;
-                        break;
-                        case LOOKER_SLAVE_STATE_DISCONNECTED:
-                            msg_begin(&msg, COMMAND_CONNECT);
-                            do
-                            {
-                                msg_send(&msg);
-                                if ((err = ack_get(&ack)) != LOOKER_EXIT_SUCCESS)
-                                {
-                                    master_state_change(MASTER_STATE_RESET);
-                                    return err;
-                                }
-                            } while (ack != RESPONSE_ACK_SUCCESS);
-                        break;
-                        default:
-                        break;
-                    }
-                break;
                 default:
+                    PRINTLN2("Error: looker_update: bad slave state comm: ", slave_state_task);
+                    master_state_change(MASTER_STATE_RESET);
+                    return LOOKER_EXIT_WRONG_COMMAND;
                 break;
             }
         break;

@@ -15,7 +15,7 @@ extern "C" {
 //#define DEBUG
 
 #ifdef DEBUG
-//    #define DEBUG_NETWORK
+//    #define DEBUG_SLAVE_STATE_TASK
 //    #define DEBUG_MSG_DECODE
 //    #define DEBUG_MSG_CHECKSUM
 //    #define DEBUG_MSG_DELAY
