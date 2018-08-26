@@ -15,7 +15,7 @@ const char *style = style_normal;
 void setup() {
     serial_init();
 
-    looker_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
+    looker_wifi_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
     looker_reg("ADC", &adc, sizeof(adc), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, &style);
     looker_reg("LEVEL", &level_critical, sizeof(level_critical), LOOKER_TYPE_UINT, LOOKER_LABEL_EDIT, NULL);
 }

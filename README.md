@@ -46,7 +46,7 @@ void setup() {
     digitalWrite(LED_BUILTIN, 1);
     serial_init();
 
-    looker_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
+    looker_wifi_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
     looker_reg("ADC", &adc, sizeof(adc), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, NULL);
     looker_reg("LED", &led, sizeof(led), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, NULL);
 }
@@ -65,7 +65,7 @@ void loop() {
 ## API walkthrough
 ---
 ```C
-looker_exit_t looker_connect(const char *ssid, const char *pass, const char *domain)
+looker_exit_t looker_wifi_connect(const char *ssid, const char *pass, const char *domain)
 ```
 Connects to the WiFi network. Usually it takes a couple of seconds to complete.
 Blue LED on the WiFi module stops blinking when it gets connected.  
@@ -92,7 +92,7 @@ Example of *wifi.h*:
 **domain**  
 sets domain name at which the device advertises. Using domain helps finding the device but is not necessary. If **domain** is skipped:
 ```C
-looker_connect(LOOKER_SSID, LOOKER_PASS, NULL)
+looker_wifi_connect(LOOKER_SSID, LOOKER_PASS, NULL)
 ```
 
 device is still present at IP address that was assigned by the access point.

@@ -334,7 +334,7 @@ void looker_init(void)
     master_state_change(MASTER_STATE_RESET);
 }
 
-looker_exit_t looker_connect(const char *ssid, const char *pass, const char *domain)
+looker_exit_t looker_wifi_connect(const char *ssid, const char *pass, const char *domain)
 {
     looker_exit_t err;
 
@@ -365,7 +365,7 @@ looker_exit_t looker_connect(const char *ssid, const char *pass, const char *dom
     return LOOKER_EXIT_SUCCESS;
 }
 
-void looker_disconnect(void)
+void looker_wifi_disconnect(void)
 {
     slave_state_task = LOOKER_SLAVE_STATE_TASK_DISCONNECT;
 }

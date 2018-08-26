@@ -12,7 +12,7 @@ void setup() {
     digitalWrite(LED_BUILTIN, 1);
     serial_init();
 
-    looker_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
+    looker_wifi_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
     looker_reg("ADC", &adc, sizeof(adc), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, NULL);
     looker_reg("LED", &led, sizeof(led), LOOKER_TYPE_UINT, LOOKER_LABEL_CHECKBOX, NULL);
 }

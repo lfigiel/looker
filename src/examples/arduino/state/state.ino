@@ -13,7 +13,7 @@ void setup() {
     digitalWrite(LED_BUILTIN, 1);
     serial_init();
 
-    looker_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
+    looker_wifi_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
     looker_reg("i", &i, sizeof(i), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, NULL);
 }
 

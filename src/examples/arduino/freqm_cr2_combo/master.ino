@@ -9,7 +9,7 @@ const char *style = DEFAULT_STYLE;
 void master_setup(void)
 {
     Serial.begin(115200);
-    looker_connect(LOOKER_SSID, LOOKER_PASS, "freqm");
+    looker_wifi_connect(LOOKER_SSID, LOOKER_PASS, "freqm");
     looker_reg("F", &f_str, 0, LOOKER_TYPE_STRING, LOOKER_LABEL_VIEW, &style);
 }
 

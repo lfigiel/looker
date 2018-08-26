@@ -207,7 +207,7 @@ void looker_destroy(void)
 #endif //LOOKER_SLAVE_USE_MALLOC
 }
 
-looker_exit_t looker_connect(const char *ssid, const char *pass, const char *domain)
+looker_exit_t looker_wifi_connect(const char *ssid, const char *pass, const char *domain)
 {
     looker_destroy();
     looker_init();

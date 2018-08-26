@@ -23,8 +23,8 @@ extern "C" {
 
 //prototypes
 void looker_init(void);
-looker_exit_t looker_connect(const char *ssid, const char *pass, const char *domain);
-void looker_disconnect(void);
+looker_exit_t looker_wifi_connect(const char *ssid, const char *pass, const char *domain);
+void looker_wifi_disconnect(void);
 looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker_type_t type, looker_label_t label, looker_style_t style);
 looker_exit_t looker_update(void);
 void looker_destroy(void);

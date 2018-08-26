@@ -15,7 +15,7 @@ DallasTemperature sensors(&oneWire);
 void master_setup(void)
 {
     sensors.begin();
-    looker_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
+    looker_wifi_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
     looker_reg("i", &i, sizeof(i), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, NULL);
     looker_reg("Temp [C]", &temp, sizeof(temp), LOOKER_TYPE_FLOAT_1, LOOKER_LABEL_VIEW, NULL);
 }
