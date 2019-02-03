@@ -1,6 +1,6 @@
 # Looker
 ## Overview
-Looker is an Open Source, multi-platform solution for making existing or new embedded projects wireless. Currently Looker supports only WiFi but Bluetooth is planned to be added in the future.
+Looker is an Open Source, multi-platform User Interface (UI) solution for embedded systems.
 
 The main goal of this project is to make it easy to use with maximum portability. Thanks to simple API Looker is installed by just adding a few lines of code. For a network communication it useses ESP8266 - popular and readily available WiFi module which is connected to the main board with only four wires.
 
