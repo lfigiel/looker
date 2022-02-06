@@ -23,6 +23,8 @@ Lukasz Figiel
 lfigiel@gmail.com
 */
 
+#include <errno.h>
+#include <float.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
@@ -32,7 +34,7 @@ lfigiel@gmail.com
 #include "looker_slave.h"
 #include "looker_stubs.h"
 #ifndef LOOKER_COMBO
-    #include "msg.h"
+#include "msg.h"
 #endif //LOOKER_COMBO
 
 #define LED_ON digitalWrite(ledPin, LOW)
@@ -82,10 +84,11 @@ looker_slave_state_t slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
 #else
     static var_t var[LOOKER_SLAVE_VAR_COUNT];
 #endif //LOOKER_SLAVE_USE_MALLOC
+long sid = 0;   //sesion id
 size_t slave_var_cnt;    //number of variables in slave's db
 unsigned char http_request;
 int server_arg = -1;
-unsigned char *looker_debug_show = NULL;
+unsigned char debug;
 unsigned char json;
 
 #ifndef LOOKER_COMBO
@@ -123,6 +126,7 @@ MDNSResponder mdns;
 IPAddress ip_addr;
 String webString="";
 Ticker ticker;
+int mdns_enabled = 0;
 
 #define TIMEOUT_CNT 100
 
@@ -131,16 +135,48 @@ static void slave_setup(void);
 static void slave_loop(void);
 void print_u64(char *v, unsigned long long i);
 void print_i64(char *v, long long i);
-long long atoll(const char *s);
-unsigned long long atoull(const char *s);
 void URL_response_print(void);
 void json_print(void);
 void html_print(void);
 static looker_exit_t network_connect(char *ssid, char *pass);
+static void sid_new(long *sid);
 static void pointers_update(void);
+void stat_print(String name, size_t value, int critical);
+void debug_reset();
 #ifndef LOOKER_COMBO
     static looker_exit_t payload_process(msg_t *msg);
 #endif //LOOKER_COMBO
+
+void debug_reset()
+{
+    stat_s_loops = 0;
+    stat_s_loops_old = 0;
+    stat_s_loops_s = 0;
+    stat_ms_updates = 0;
+    stat_sm_updates = 0;
+    stat_s_resets = 0;
+    stat_ms_timeouts = 0;
+#ifndef LOOKER_COMBO
+    stat_ack_get_failures = 0;
+    stat_ack_send_failures = 0;
+    stat_msg_timeouts = 0;
+    stat_msg_prefix_errors = 0;
+    stat_msg_payload_errors = 0;
+    stat_msg_checksum_errors = 0;
+#endif //LOOKER_COMBO
+}
+
+//sets new session id to relaod the page
+static void sid_new(long *sid)
+{
+    if (*sid == 0) {
+        randomSeed(ESP.getCycleCount());
+        *sid = random(1, 0xFFFF);
+    } else {
+        (*sid)++;
+        if (*sid > 0xFFFF) *sid = 1;
+    }
+}
 
 //todo: also static or enough if only in prototype
 void pointers_update(void)
@@ -161,9 +197,6 @@ void pointers_update(void)
             default:
             break;
         }
-
-        if (!strcmp(var[i].name, "looker_debug"))
-            looker_debug_show = (unsigned char *) &var[i].value_current;
     }
 }
 
@@ -294,13 +327,10 @@ looker_exit_t looker_reg(const char *name, volatile void *addr, int size, looker
     var[slave_var_cnt].style_current = style;
 #endif //((LOOKER_SLAVE_STYLE == LOOKER_STYLE_FIXED) || (LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE))
 
-    //set up looker_debug pointer
-    //in combo mode ssid, pass and domain are already set up in connect function
-    if (!strcmp(var[slave_var_cnt].name, "looker_debug"))
-        looker_debug_show = (unsigned char *) var[slave_var_cnt].value_current;
+    //set new session id to relaod the page
+    sid_new(&sid);
 
     slave_var_cnt++;
-
     return LOOKER_EXIT_SUCCESS;
 }
 
@@ -311,19 +341,18 @@ looker_exit_t looker_update(void)
 }
 #endif //LOOKER_COMBO
 
-void stat_print(String string, size_t stat, unsigned char red)
+void stat_print(String name, size_t value, int critical)
 {
-    webString += "        ";
-
-    if (red && stat)
-        webString += "<p style='margin:0;color:red;'>";
-
-    webString += string + ": " + String(stat);
-
-    if (red && stat)
+    if (name) {
+        webString += "        <p id='";
+        webString += name;
+        if (value && critical)
+            webString += "' style='margin:0;color:red;'>";
+        else
+            webString += "' style='margin:0;color:black;'>";
+        webString += name + ": " + String(value);
         webString += "</p>\n";
-    else
-        webString += "<br>\n";
+    }
 }
 
 void led_period(size_t timeout)
@@ -377,47 +406,6 @@ void print_i64(char *v, long long i)
     print_u64(v, i);
 }
 
-long long atoll(const char *s)
-{
-    long long l = 0;
-    int i = 0;
-    char minus = 0;
-
-    while (s[i] == ' ')
-        i++;
-
-    if (s[i] == '-')
-    {
-        minus = 1;
-        i++;
-    }
-
-    l = atoull(&s[i]);
-
-    if (minus)
-        return -l;
-    else
-        return l;
-}
-
-unsigned long long atoull(const char *s)
-{
-    unsigned long long l = 0;
-    int i = 0;
-
-    while (s[i] == ' ')
-        i++;
-
-    while (s[i])
-    {
-        l += (s[i++] - '0');
-        if (s[i])
-            l *= 10;
-    }
-
-    return l;
-}
-
 void URL_response_print(void)
 {
     if (json)
@@ -428,130 +416,45 @@ void URL_response_print(void)
 
 void json_print(void)
 {
-    StaticJsonBuffer<512> jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
+    StaticJsonDocument<512> jsonDoc;
     char value_text[(LOOKER_SLAVE_VAR_VALUE_SIZE > 20) ? (LOOKER_SLAVE_VAR_VALUE_SIZE + 1) : (20 + 1)]; //20 is the length of max 64-bit number
     size_t i;
 
-    for (i=0; i<slave_var_cnt; i++)
-    {
-        //skip some vars
-        if ((var[i].label == LOOKER_LABEL_SSID) || (var[i].label == LOOKER_LABEL_PASS) || (var[i].label == LOOKER_LABEL_DOMAIN))
-            continue;
+    server.sendHeader("Access-Control-Allow-Origin", "*");
 
-        if (var[i].type == LOOKER_TYPE_INT)
+    if (ms_timeout >= 0) {
+        jsonDoc["looker_sid"] = String(sid);
+        for (i=0; i<slave_var_cnt; i++)
         {
-            long long value_int = 0;
-            memcpy(&value_int, var[i].value_current, var[i].size);
-            if (var[i].size == 8)
-                print_i64(value_text, value_int);
-            else
-            {
-                if (value_int & (1LU << ((8 * var[i].size) - 1)))
-                    value_int = -~value_int-1;
-                sprintf(value_text, "%ld", value_int);
-            }
-        }
-        else if (var[i].type == LOOKER_TYPE_UINT)
-        {
-            unsigned long long value_uint = 0;
-            memcpy(&value_uint, var[i].value_current, var[i].size);
-            if (var[i].size == 8)
-                print_u64(value_text, value_uint);
-            else
-                sprintf(value_text, "%lu", value_uint);
-        }
-        else if (var[i].type == LOOKER_TYPE_STRING)
-            strcpy(value_text, (char *) var[i].value_current);
-        else if ((var[i].type >= LOOKER_TYPE_FLOAT_0) && (var[i].type <= LOOKER_TYPE_FLOAT_4))
-        {
-            unsigned char prec = var[i].type - LOOKER_TYPE_FLOAT_0;
-            if (var[i].size == sizeof(float))
-            {
-                float f;
-                memcpy(&f, var[i].value_current, sizeof(f));
-                dtostrf(f, 1, prec, value_text);
-            }
-            else if (var[i].size == sizeof(double))
-            {
-                double d;
-                memcpy(&d, var[i].value_current, sizeof(d));
-                dtostrf(d, 1, prec, value_text);
-            }
-        }
-
-        root[var[i].name] = value_text;
-    }
-
-    webString = "";
-    root.printTo(webString);
-    server.send(200, "text/json", webString);
-}
-
-void html_print(void)
-{
-    webString =
-    "<!doctype html>\n"
-    "    <head>\n"
-    "        <title>Looker</title>\n"
-    "    </head>\n"
-    "    <body>\n";
-
-    if (network_domain)
-        webString += "        <h2>" + String(network_domain) + "</h2>\n";
-
-    webString +=
-    "        <button id='refresh_id' onclick='refresh_func()'></button>\n"
-    "        <script>\n"
-    "            var refresh_label = 'Turn refresh OFF'\n"
-    "            var refresh_timeout;\n"
-    "            if (refresh_label == 'Turn refresh OFF')\n"
-    "                refresh_timeout = window.setTimeout(function(){window.location.href=window.location.href.split('?')[0]},1000);\n"
-    "            document.getElementById('refresh_id').innerHTML = refresh_label;\n"
-    "            function refresh_func() {\n"
-    "                if (refresh_label == 'Turn refresh OFF')\n"
-    "                {\n"
-    "                    clearTimeout(refresh_timeout);\n"
-    "                    refresh_label = 'Turn refresh ON';\n"
-    "                }\n"
-    "                else\n"
-    "                    window.location.href=window.location.href.split('?')[0];\n"
-    "                document.getElementById('refresh_id').innerHTML = refresh_label;\n"
-    "            }\n"
-    "        </script>\n";
-
-    if (ms_timeout >= 0)
-    {
-        webString += "        <form method='post'>\n";
-        webString += "            <br>\n";
-
-        for (int i=0; i<slave_var_cnt; i++)
-        {
-            unsigned long long value_int = 0;
-            char value_text[(LOOKER_SLAVE_VAR_VALUE_SIZE > 20) ? (LOOKER_SLAVE_VAR_VALUE_SIZE + 1) : (20 + 1)]; //20 is the length of max 64-bit number
-
+            //skip some vars
             if ((var[i].label == LOOKER_LABEL_SSID) || (var[i].label == LOOKER_LABEL_PASS) || (var[i].label == LOOKER_LABEL_DOMAIN))
                 continue;
 
             if (var[i].type == LOOKER_TYPE_INT)
             {
-                memcpy(&value_int, var[i].value_current, var[i].size);
-                if (var[i].size == 8)
-                    print_i64(value_text, (long long) value_int);
-                else
-                {
-                    if (value_int & (1LU << ((8 * var[i].size) - 1)))
-                        value_int = -~value_int-1;
-                    sprintf(value_text, "%ld", (long long) value_int);
-                }
+                switch (var[i].size) {
+                    case 1:
+                        sprintf(value_text, "%d", *(int8_t *) var[i].value_current);
+                        break;
+                    case 2:
+                        sprintf(value_text, "%d", *(int16_t *) var[i].value_current);
+                        break;
+                    case 4:
+                        sprintf(value_text, "%d", *(int32_t *) var[i].value_current);
+                        break;
+                    case 8:
+                        print_i64(value_text, *(int64_t *) var[i].value_current);
+                        break;
+                    }
             }
             else if (var[i].type == LOOKER_TYPE_UINT)
             {
-                memcpy(&value_int, var[i].value_current, var[i].size);
+                unsigned long long value_current = 0ULL;
+                memcpy(&value_current, var[i].value_current, var[i].size);
                 if (var[i].size == 8)
-                    print_u64(value_text, value_int);
-                else 
-                    sprintf(value_text, "%lu", value_int);
+                    print_u64(value_text, value_current);
+                else
+                    sprintf(value_text, "%u", value_current);
             }
             else if (var[i].type == LOOKER_TYPE_STRING)
                 strcpy(value_text, (char *) var[i].value_current);
@@ -572,7 +475,122 @@ void html_print(void)
                 }
             }
 
-            webString += "            ";
+            jsonDoc[var[i].name] = value_text;
+        }
+
+        if (debug) {
+            jsonDoc["looker_S_State"] = String(slave_state);
+            jsonDoc["looker_S_Loops"] = String(stat_s_loops);
+            jsonDoc["looker_S_Loops/s"] = String(stat_s_loops_s);
+            jsonDoc["looker_S_Resets"] = String(stat_s_resets);
+            jsonDoc["looker_MS_Updates"] = String(stat_ms_updates);
+            jsonDoc["looker_MS_Timeouts"] = String(stat_ms_timeouts);
+#ifndef LOOKER_COMBO
+            jsonDoc["looker_MS_ACK_Failures"] = String(stat_ack_get_failures);
+//todo: to be implemented
+//            jsonDoc["looker_MS_Msg_Timeouts"] = String(stat_msg_timeouts);
+            jsonDoc["looker_MS_Msg_Prefix_Errors"] = String(stat_msg_prefix_errors);
+            jsonDoc["looker_MS_Msg_Payload_Errors"] = String(stat_msg_payload_errors);
+            jsonDoc["looker_MS_Msg_Checksum_Errors"] = String(stat_msg_checksum_errors);
+            jsonDoc["looker_SM_ACK_Failures"] = String(stat_ack_send_failures);
+#endif //LOOKER_COMBO
+            jsonDoc["looker_SM_Updates"] = String(stat_sm_updates);
+        }
+    } else
+        jsonDoc["looker_timeout"] = String((MS_TIMEOUT-ms_timeout)/1000);
+
+    webString = "";
+    serializeJson(jsonDoc, webString);
+    server.send(200, "text/json", webString);
+}
+
+void html_print(void)
+{
+    server.sendHeader("Access-Control-Allow-Origin", "*");
+    webString =
+    "<!doctype html>\n"
+    "<html>\n"
+    "<head>\n"
+    "    <title>";
+    if (network_domain)
+        webString += String(network_domain);
+    else
+        webString += "Looker";
+    webString +=
+    "</title>\n"
+    "</head>\n"
+    "<body>\n";
+
+    if (network_domain)
+        webString += "    <h2>" + String(network_domain) + "</h2>\n";
+
+    webString +=
+    "    <table><tr>\n"
+    "    <td><button id='refresh_id' onclick='refresh_func()'></button></td>\n"
+    "    <td id='looker_updated' style='color:white;'>&#8226;</td>\n"
+    "    <td id='looker_timeout'></td>\n"
+    "    </tr></table>\n"
+    "    <br>\n";
+
+    webString += "    <form method='post'>\n";
+
+    for (int i=0; i<slave_var_cnt; i++)
+    {
+        char value_text[(LOOKER_SLAVE_VAR_VALUE_SIZE > 20) ? (LOOKER_SLAVE_VAR_VALUE_SIZE + 1) : (20 + 1)]; //20 is the length of max 64-bit number
+
+        if ((var[i].label == LOOKER_LABEL_SSID) || (var[i].label == LOOKER_LABEL_PASS) || (var[i].label == LOOKER_LABEL_DOMAIN))
+            continue;
+
+        if (var[i].type == LOOKER_TYPE_INT)
+        {
+            switch (var[i].size) {
+                case 1:
+                    sprintf(value_text, "%d", *(int8_t *) var[i].value_current);
+                    break;
+                case 2:
+                    sprintf(value_text, "%d", *(int16_t *) var[i].value_current);
+                    break;
+                case 4:
+                    sprintf(value_text, "%d", *(int32_t *) var[i].value_current);
+                    break;
+                case 8:
+                    print_i64(value_text, *(int64_t *) var[i].value_current);
+                    break;
+                }
+        }
+        else if (var[i].type == LOOKER_TYPE_UINT)
+        {
+            unsigned long long value_current = 0ULL;
+            memcpy(&value_current, var[i].value_current, var[i].size);
+            if (var[i].size == 8)
+                print_u64(value_text, value_current);
+            else
+                sprintf(value_text, "%u", value_current);
+        }
+        else if (var[i].type == LOOKER_TYPE_STRING)
+            strcpy(value_text, (char *) var[i].value_current);
+        else if ((var[i].type >= LOOKER_TYPE_FLOAT_0) && (var[i].type <= LOOKER_TYPE_FLOAT_4))
+        {
+            unsigned char prec = var[i].type - LOOKER_TYPE_FLOAT_0;
+            if (var[i].size == sizeof(float))
+            {
+                float f;
+                memcpy(&f, var[i].value_current, sizeof(f));
+                dtostrf(f, 1, prec, value_text);
+            }
+            else if (var[i].size == sizeof(double))
+            {
+                double d;
+                memcpy(&d, var[i].value_current, sizeof(d));
+                dtostrf(d, 1, prec, value_text);
+            }
+        }
+
+        webString += "        ";
+        if (var[i].label == LOOKER_LABEL_VIEW) {
+            webString += "<p id='";
+            webString += var[i].name;
+            webString += "'";
 #ifdef LOOKER_COMBO
 #if LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE
             if ((var[i].style_current) && (*var[i].style_current))
@@ -583,7 +601,7 @@ void html_print(void)
             if (strlen(var[i].style_current))
 #endif //LOOKER_COMBO
             {
-                webString += "<p style='";
+                webString += " style='";
 //todo: not String(var[i].style) ???
 #ifdef LOOKER_COMBO
 #if LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE
@@ -597,108 +615,191 @@ void html_print(void)
                 webString += "'>";
             }
             else
-                webString += "<p>";
+                webString += ">";
 
             webString += var[i].name;
             webString += ": ";
-
-            if (var[i].label == LOOKER_LABEL_VIEW)
-                webString += value_text;
-            else if (var[i].label == LOOKER_LABEL_EDIT)
-            {
-                webString += "<input ";
-#ifdef LOOKER_COMBO
-#if LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE
-            if ((var[i].style_current) && (*var[i].style_current))
-#else
-            if (var[i].style_current)
-#endif //LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE
-#else
-            if (strlen(var[i].style_current))
-#endif //LOOKER_COMBO
-                {
-                    webString += "style='";
-//todo: not String(var[i].style) ???
-#ifdef LOOKER_COMBO
-#if LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE
-                webString += *var[i].style_current;
-#else
-                webString += var[i].style_current;
-#endif //LOOKER_SLAVE_STYLE == LOOKER_STYLE_VARIABLE
-#else
-                webString += var[i].style_current;
-#endif //LOOKER_COMBO
-                    webString += "' ";
-                }
-                webString += "type='text' name='";
-                webString += var[i].name;
-                webString += "' value='";
-                webString += value_text;
-                webString += "'>";
-            }
-            else if (var[i].label == LOOKER_LABEL_CHECKBOX)
-            {
-                webString += "<input type='hidden' name='";
-                webString += var[i].name;
-                webString += "' value='0'>\n";
-
-                webString += "            ";
-                webString += "<input type='checkbox' name='";
-                webString += var[i].name;
-                webString += "' value='1'";
-                if (value_int)
-                    webString += "checked";
-                webString += ">";
-            }
-            else if (var[i].label == LOOKER_LABEL_CHECKBOX_INV)
-            {
-                webString += "<input type='hidden' name='";
-                webString += var[i].name;
-                webString += "' value='1'>\n";
-
-                webString += "            ";
-                webString += "<input type='checkbox' name='";
-                webString += var[i].name;
-                webString += "' value='0'";
-                if (!value_int)
-                    webString += "checked";
-                webString += ">";
-            }
-            webString += "</p>\n";
+            webString += value_text;
+        }
+        else
+        {
+            webString += "<p>";
+            webString += var[i].name;
+            webString += ": ";
         }
 
-        if (!slave_var_cnt)
-            webString += "No Variables<br>\n";
-        else
-            webString += "            <br><input type='submit' value='Submit'><br>\n";
+        if (var[i].label == LOOKER_LABEL_EDIT)
+        {
+            webString += "<input id='";
+            webString += var[i].name;
+            webString += "' ";
+            webString += "type='text' name='";
+            webString += var[i].name;
+            webString += "' value='";
+            webString += value_text;
+            webString += "'>";
+        }
+        else if (var[i].label == LOOKER_LABEL_CHECKBOX)
+        {
+            webString += "<input type='hidden' name='";
+            webString += var[i].name;
+            webString += "' value='0'>\n";
+            webString += "        ";
+            webString += "<input id='";
+            webString += var[i].name;
+            webString += "' ";
+            webString += "type='checkbox' name='";
+            webString += var[i].name;
+            webString += "' value='1'";
+            if (strcmp(value_text, "0"))
+                webString += " checked";
+            webString += ">";
+        }
+        else if (var[i].label == LOOKER_LABEL_CHECKBOX_INV)
+        {
+            webString += "<input type='hidden' name='";
+            webString += var[i].name;
+            webString += "' value='1'>\n";
 
-        webString += "        </form>\n";
+            webString += "        ";
+            webString += "<input id='";
+            webString += var[i].name;
+            webString += "' ";
+            webString += "type='checkbox' name='";
+            webString += var[i].name;
+            webString += "' value='0'";
+            if (!strcmp(value_text, "0"))
+                webString += " checked";
+            webString += ">";
+        }
+        webString += "</p>\n";
     }
-    else
-        webString += "        <h3>Error: Master->Slave Timeout: " + String((MS_TIMEOUT-ms_timeout)/1000) + " s</h3>\n";
 
-    if ((looker_debug_show) && (*looker_debug_show))
+    if (!slave_var_cnt)
+        webString += "No Variables<br>\n";
+    else {
+        webString += "        <br>\n";
+        webString += "        <input type='submit' value='Submit'><br>\n";
+    }
+    webString += "    </form>\n";
+
+    if (debug)
     {
         webString += "        <h2>Debug:</h2>\n";
-        stat_print("S State", slave_state, 0);
-        stat_print("S Loops", stat_s_loops, 0);
-        stat_print("S Loops/s", stat_s_loops_s, 0);
-        stat_print("S Resets", stat_s_resets, 0);
-        stat_print("MS Updates", stat_ms_updates, 0);
-        stat_print("MS Timeouts", stat_ms_timeouts, 1);
+        stat_print("looker_S_State", slave_state, 0);
+        stat_print("looker_S_Loops", stat_s_loops, 0);
+        stat_print("looker_S_Loops/s", stat_s_loops_s, 0);
+        stat_print("looker_S_Resets", stat_s_resets, 0);
+        stat_print("looker_MS_Updates", stat_ms_updates, 0);
+        stat_print("looker_MS_Timeouts", stat_ms_timeouts, 1);
 #ifndef LOOKER_COMBO
-        stat_print("MS ACK Failures", stat_ack_get_failures, 1);
+        stat_print("looker_MS_ACK_Failures", stat_ack_get_failures, 1);
 //todo: to be implemented
-//        stat_print("MS Msg Timeouts", stat_msg_timeouts, 1);
-        stat_print("MS Msg Prefix Errors", stat_msg_prefix_errors, 1);
-        stat_print("MS Msg Payload Errors", stat_msg_payload_errors, 1);
-        stat_print("MS Msg Checksum Errors", stat_msg_checksum_errors, 1);
-        stat_print("SM ACK Failures", stat_ack_send_failures, 1);
+//        stat_print("looker_MS_Msg_Timeouts", stat_msg_timeouts, 1);
+        stat_print("looker_MS_Msg_Prefix_Errors", stat_msg_prefix_errors, 1);
+        stat_print("looker_MS_Msg_Payload_Errors", stat_msg_payload_errors, 1);
+        stat_print("looker_MS_Msg_Checksum_Errors", stat_msg_checksum_errors, 1);
+        stat_print("looker_SM_ACK_Failures", stat_ack_send_failures, 1);
 #endif //LOOKER_COMBO
-        stat_print("SM Updates", stat_sm_updates, 0);
+        stat_print("looker_SM_Updates", stat_sm_updates, 0);
     }
 
-    webString += "    </body>\n";
+    webString +=
+    "    <script>\n"
+    "    //var refresh_label = 'Turn refresh OFF'\n"
+    "    var refresh_label = 'Turn refresh ON'\n"
+    "    var refresh_timeout;\n"
+    "    document.getElementById('refresh_id').innerHTML = refresh_label;\n";
+    if (debug)
+        webString += "    Get(window.location.href.split('?')[0] + '?looker_debug=1&looker_json=1');\n";
+    else
+        webString += "    Get(window.location.href.split('?')[0] + '?looker_json=1');\n";
+    webString +=
+    "\n"
+    "    function submit() {\n"
+    "        document.getElementById('form').submit();\n"
+    "    }\n"
+    "\n"
+    "    function onLoad () {\n"
+    "        var json_obj = this.response;\n"
+    "        var timeout = 0;\n"
+    "        for (var key in json_obj) {\n"
+    "            if (key === 'looker_sid')\n"
+    "                if (json_obj['looker_sid'] !== ";
+    webString += "'" + String(sid) + "')\n";
+    if (debug)
+        webString += "                    window.location.href.split('?')[0] + '?looker_debug=1';\n";
+    else
+        webString += "                    window.location.href.split('?')[0];\n";
+    webString +=
+    "            if (key === 'looker_timeout') {\n"
+    "                timeout = 1;\n"
+    "                continue;\n"
+    "            }\n"
+    "            var obj = document.getElementById(key);\n"
+    "            if (obj === null)\n"
+    "                continue;\n"
+    "            if (obj.type === 'text')\n"
+    "                obj.value = json_obj[key];\n"
+    "            else if (obj.type === 'checkbox') {\n"
+    "                if (json_obj[key] === '1')\n"
+    "                    obj.checked = true;\n"
+    "                else\n"
+    "                    obj.checked = false;\n"
+    "            }\n"
+    "            else\n"
+    "                obj.innerHTML = key + ': ' + json_obj[key];\n"
+    "        }\n"
+    "        if ((timeout === 1) && (refresh_label == 'Turn refresh OFF'))\n"
+    "            document.getElementById('looker_timeout').innerHTML = 'timeout: ' + json_obj['looker_timeout'];\n"
+    "        else\n"
+    "            document.getElementById('looker_timeout').innerHTML = ' ';\n"
+    "        if (refresh_label == 'Turn refresh OFF')\n";
+    if (debug)
+        webString += "            refresh_timeout = window.setTimeout(Get,1000,window.location.href.split('?')[0] + '?looker_debug=1&looker_json=1');\n";
+    else
+        webString += "            refresh_timeout = window.setTimeout(Get,1000,window.location.href.split('?')[0] + '?looker_json=1');\n";
+    webString +=
+    "        document.getElementById('looker_updated').style='color:black;';\n"
+    "        updated_timeout = window.setTimeout(function(){document.getElementById('looker_updated').style='color:white;';}, 200, null);\n"
+    "    }\n"
+    "\n"
+    "    function onError () {\n"
+    "        clearTimeout(refresh_timeout);\n"
+    "        refresh_label = 'Turn refresh ON';\n"
+    "        document.getElementById('looker_timeout').innerHTML = ' ';\n"
+    "        document.getElementById('refresh_id').innerHTML = refresh_label;\n"
+    "        alert('Error: looker: server timeout');\n"
+    "    }\n"
+    "\n"
+    "    function Get(url) {\n"
+    "        var xhr = new XMLHttpRequest();\n"
+    "        xhr.addEventListener('load', onLoad);\n"
+    "        xhr.addEventListener('error', onError);\n"
+    "        xhr.responseType = 'json';\n"
+    "        xhr.open('GET',url);\n"
+    "        xhr.send();\n"
+    "    }\n"
+    "\n"
+    "    function refresh_func() {\n"
+    "        if (refresh_label == 'Turn refresh OFF') {\n"
+    "            clearTimeout(refresh_timeout);\n"
+    "            refresh_label = 'Turn refresh ON';\n"
+    "            document.getElementById('looker_timeout').innerHTML = ' ';\n"
+    "        }\n"
+    "        else {\n"
+    "            refresh_label = 'Turn refresh OFF';\n";
+    if (debug)
+        webString += "            Get(window.location.href.split('?')[0] + '?looker_debug=1&looker_json=1');\n";
+    else
+        webString += "            Get(window.location.href.split('?')[0] + '?looker_json=1');\n";
+    webString +=
+    "        }\n"
+    "        document.getElementById('refresh_id').innerHTML = refresh_label;\n"
+    "    }\n"
+    "    </script>\n";
+
+    webString += "</body>\n";
     webString += "</html>\n";
 
     server.send(200, "text/html", webString);
@@ -738,21 +839,25 @@ void ticker_handler()
 
 void handle_root()
 {
-    size_t i;
-    if (server.args())
-    {
-        //JSON ?
-        i = 0;
-        while ((i<server.args()) && (strcmp(server.argName(i).c_str(), "looker_json") != 0))
-            i++;
-        if (i < server.args())
+    json = 0;
+    debug = 0;
+
+    for (size_t i=0; i<server.args(); i++) {
+        if (!strcmp(server.argName(i).c_str(), "looker_json"))
+//todo: check also if value = 1
             json = 1;
-        else
-            json = 0;
-        server_arg = 0; //0 - index of first arg to process
+        else if (!strcmp(server.argName(i).c_str(), "looker_debug")) {
+            debug = 1;
+            if (!strcmp(server.arg(i).c_str(), "0"))
+                debug_reset();
+        }
+        if (json && debug)
+            break;
     }
-    else
-        json = 0;
+
+    if (server.args())
+        server_arg = 0; //0 - index of first arg to process
+
     http_request = 1;
 }
  
@@ -803,55 +908,87 @@ unsigned char var_replace(const char *var_name, const char *var_value)
     switch (var[i].type) {
         case LOOKER_TYPE_INT:
         {
-            long long value_new, value_old;
-            value_new = atoll(var_value);
-            value_old = 0;
-            memcpy(&value_old, var[i].value_current, var[i].size);
+            long long value_new;
+            char *endptr;
 
-            if (value_new != value_old)
-            {
-                memcpy(var[i].value_current, &value_new, var[i].size);
-                master_var_set(i);
-                return 1;
+            errno = 0;
+            value_new = strtoll(var_value, &endptr, 10);
+            if ((*endptr != 0) || (errno == ERANGE))
+                break;
+
+            switch (var[i].size) {
+                case 1:
+                    if ((value_new < -128LL) || (value_new > 127LL))
+                        return 0;
+                    if ((int8_t) value_new == *(int8_t *) var[i].value_current)
+                        return 0;
+                    *(int8_t *) var[i].value_current = (int8_t) value_new;
+                    break;
+                case 2:
+                    if ((value_new < -32768LL) || (value_new > 32767LL))
+                        return 0;
+                    if ((int16_t) value_new == *(int16_t *) var[i].value_current)
+                        return 0;
+                    *(int16_t *) var[i].value_current = (int16_t) value_new;
+                    break;
+                case 4:
+                    if ((value_new < -2147483648LL) || (value_new > 2147483647LL))
+                        return 0;
+                    if ((int32_t) value_new == *(int32_t *) var[i].value_current)
+                        return 0;
+                    *(int32_t *) var[i].value_current = (int32_t) value_new;
+                    break;
+                case 8:
+                    //range was alredy checked
+                    if (value_new == *(int64_t *) var[i].value_current)
+                        return 0;
+                    *(int64_t *) var[i].value_current = value_new;
+                    break;
+                default:
+                    return 0;
             }
-        break;
+            master_var_set(i);
+            return 1;
         }
         case LOOKER_TYPE_UINT:
         {
-            unsigned long long value_new, value_old;
-            value_new = atoull(var_value);
-            value_old = 0;
-            memcpy(&value_old, var[i].value_current, var[i].size);
+            unsigned long long value_new;
+            unsigned long long value_current = 0ULL;
+            char *endptr;
 
-            if (value_new != value_old)
+            errno = 0;
+            value_new = strtoull(var_value, &endptr, 10);
+            if ((*endptr != 0) || (errno == ERANGE))
+                break;
+
+            switch (var[i].size) {
+                case 1:
+                    if (value_new > 255ULL)
+                        return 0;
+                    break;
+                case 2:
+                    if (value_new > 65535ULL)
+                        return 0;
+                    break;
+                case 4:
+                    if (value_new > 4294967295ULL)
+                        return 0;
+                    break;
+                case 8:
+                    //range was alredy checked
+                    break;
+                default:
+                    return 0;
+            }
+
+            memcpy(&value_current, var[i].value_current, var[i].size);
+            if (value_current != value_new)
             {
                 memcpy(var[i].value_current, &value_new, var[i].size);
                 master_var_set(i);
-
-                if (!strcmp(var[i].name, "looker_debug"))
-                {
-                    if (!value_new)     //reset stats if looker_debug changes from 1 -> 0
-                    {
-                        stat_s_loops = 0;
-                        stat_s_loops_old = 0;
-                        stat_s_loops_s = 0;
-                        stat_ms_updates = 0;
-                        stat_sm_updates = 0;
-                        stat_s_resets = 0;
-                        stat_ms_timeouts = 0;
-#ifndef LOOKER_COMBO
-                        stat_ack_get_failures = 0;
-                        stat_ack_send_failures = 0;
-                        stat_msg_timeouts = 0;
-                        stat_msg_prefix_errors = 0;
-                        stat_msg_payload_errors = 0;
-                        stat_msg_checksum_errors = 0;
-#endif //LOOKER_COMBO
-                    }
-                }
                 return 1;
             }
-        break;
+            break;
         }
         case LOOKER_TYPE_FLOAT_0:
         case LOOKER_TYPE_FLOAT_1:
@@ -859,33 +996,35 @@ unsigned char var_replace(const char *var_name, const char *var_value)
         case LOOKER_TYPE_FLOAT_3:
         case LOOKER_TYPE_FLOAT_4:
         {
-            double value_new, value_old;
-            float f;
+            double value_new;
+            char *endptr;
+            char err;
 
-            value_new = atof(var_value);
-            value_old = 0;
-            if (var[i].size == sizeof(float))
-            {
-                memcpy(&f, var[i].value_current, var[i].size);
-                value_old = (double) f;
+            errno = 0;
+            value_new = strtod(var_value, &endptr);
+            if ((*endptr != 0) || (errno == ERANGE))
+                break;
+
+            switch (var[i].size) {
+                case 4:
+                    if (((value_new < -FLT_MAX) || (value_new > FLT_MAX))
+                      || ((value_new > -FLT_MIN) && (value_new < FLT_MIN)))
+                        return 0;
+                    if (*(float *) var[i].value_current == (float ) value_new)
+                        return 0;
+                    *(float *) var[i].value_current = (float) value_new;
+                    break;
+                case 8:
+                    //range was alredy checked
+                    if (*(double *) var[i].value_current == value_new)
+                        return 0;
+                    *(double *) var[i].value_current = value_new;
+                    break;
+                default:
+                    return 0;
             }
-            else
-                memcpy(&value_old, var[i].value_current, var[i].size);
-
-            if (value_new != value_old)
-            {
-                if (var[i].size == sizeof(float))
-                {
-                    f = (float) value_new;
-                    memcpy(var[i].value_current, &f, var[i].size);
-                }
-                else
-                    memcpy(var[i].value_current, &value_new, var[i].size);
-
-                master_var_set(i);
-                return 1;
-            }
-        break;
+            master_var_set(i);
+            return 1;
         }
         case LOOKER_TYPE_STRING:
             if (strcmp((char *) var[i].value_current, var_value) != 0)
@@ -900,7 +1039,7 @@ unsigned char var_replace(const char *var_name, const char *var_value)
                     return 1;
                 }
             }
-        break;
+            break;
         default:
             return 0;
     }
@@ -951,15 +1090,13 @@ static looker_exit_t register_process(msg_t *msg)
     //reset style
     var[slave_var_cnt].style_current[0] = 0;
 
-    //set up ssid, pass, domain and looker_debug pointers
+    //set up ssid, pass and domain
     if (var[slave_var_cnt].label == LOOKER_LABEL_SSID)
         network_ssid = (char *) &var[slave_var_cnt].name;
     else if (var[slave_var_cnt].label == LOOKER_LABEL_PASS)
         network_pass = (char *) &var[slave_var_cnt].name;
     if (var[slave_var_cnt].label == LOOKER_LABEL_DOMAIN)
         network_domain = (char *) &var[slave_var_cnt].name;
-    if (!strcmp(var[slave_var_cnt].name, "looker_debug"))
-        looker_debug_show = (unsigned char *) &var[slave_var_cnt].value_current;
 
     slave_var_cnt++;
 }
@@ -976,6 +1113,8 @@ static looker_exit_t payload_process(msg_t *msg)
             //re-connection takes time so reset does not disrupt connection
             rebooted = 0;
             slave_var_cnt = 0;
+            //set new session id to relaod the page
+            sid_new(&sid);
 #ifdef LOOKER_SLAVE_USE_MALLOC
             if (var)
             {
@@ -983,7 +1122,6 @@ static looker_exit_t payload_process(msg_t *msg)
                 var = NULL;
             }
 #endif //LOOKER_SLAVE_USE_MALLOC
-            looker_debug_show = NULL;
 
             server_arg = -1;
             stat_s_resets++;
@@ -1020,6 +1158,8 @@ static looker_exit_t payload_process(msg_t *msg)
         case COMMAND_VAR_REG:
             register_process(msg);
 //todo: report exit code to master
+            //set new session id to relaod the page
+            sid_new(&sid);
             stat_ms_updates++;
             ack_send(RESPONSE_ACK_SUCCESS);
         break;
@@ -1110,7 +1250,7 @@ void slave_setup(void)
 {
 #ifndef LOOKER_COMBO
     rebooted = 1;
-    serial_init();
+    looker_stubs_init(NULL);
 #endif //LOOKER_COMBO
 
     WiFi.disconnect();
@@ -1140,8 +1280,13 @@ void slave_loop(void)
         if (slave_state == LOOKER_SLAVE_STATE_CONNECTING)
         {
             ip_addr = WiFi.localIP();
-            if (network_domain)
-                mdns.begin(network_domain, ip_addr);
+            if (network_domain) {
+                if (mdns.begin(network_domain, ip_addr)) {
+                    mdns_enabled=1;
+                    mdns.addService("http", "tcp", 80);
+                } else mdns_enabled=0;
+            } else mdns_enabled=0;
+
             server.on("/", handle_root);
             server.begin();
             led_period(500);
@@ -1156,6 +1301,8 @@ void slave_loop(void)
         //only if no args to process
         if (server_arg < 0)
             server.handleClient();
+        if (mdns_enabled)
+            mdns.update();
 
 #ifdef LOOKER_COMBO
         size_t i, j;
@@ -1180,8 +1327,10 @@ void slave_loop(void)
     }
     else
     {
-        if (slave_state != LOOKER_SLAVE_STATE_CONNECTING)
+        if (slave_state != LOOKER_SLAVE_STATE_CONNECTING) {
             slave_state = LOOKER_SLAVE_STATE_DISCONNECTED;
+            mdns_enabled=0;
+        }
     }
 
 #ifndef LOOKER_COMBO
@@ -1306,4 +1455,3 @@ void slave_loop(void)
         http_request = 0;
     }
 }
-

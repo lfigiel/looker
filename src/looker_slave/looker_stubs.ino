@@ -1,19 +1,25 @@
 #define LOOKER_STUBS_C
 #include "looker_stubs.h"
 
-#define BAUD_RATE 57600
+#define LOOKER_BAUD_RATE 57600
 
 #ifdef DEBUG
 #include <SoftwareSerial.h>
-SoftwareSerial debugSerial(SW_SERIAL_UNUSED_PIN, 4);  //RX, TX   TX is only used, 4 = D2 in NodeMcu
+#define DEBUG_BAUD_RATE 57600
+#define DEBUG_RX_PIN SW_SERIAL_UNUSED_PIN
+#define DEBUG_TX_PIN 4
+//4 = D2 in NodeMcu
+
+SoftwareSerial debug_serial(DEBUG_RX_PIN, DEBUG_TX_PIN);
 #endif //DEBUG
 
-void serial_init(void)
+int looker_stubs_init(void *p)
 {
-    Serial.begin(57600);
+    Serial.begin(LOOKER_BAUD_RATE);
 #ifdef DEBUG
-    debugSerial.begin(57600);
+    debug_serial.begin(DEBUG_BAUD_RATE);
 #endif //DEBUG
+    return 0;
 }
 
 void looker_delay_1ms(void)
@@ -41,27 +47,19 @@ int looker_get(void *buf, int size)   //non blocking read
 
 void looker_send(void *buf, int size)
 {
-    int n;
-    char c;
-    for (n = 0; n < size; n++)
-    {
-        c =  *((char *)buf);
-        buf = buf + 1;
-        Serial.write((byte) c);
-        delay(10);
-    }
+    Serial.write((const uint8_t *) buf, size);
 }
 
 #ifdef DEBUG
 void debug_print(const char *s)
 {
-    debugSerial.print(s);
+    debug_serial.print(s);
 }
 
 void debug_println2(const char *s, int i)
 {
-    debugSerial.print(s);
-    debugSerial.println(i);
+    debug_serial.print(s);
+    debug_serial.println(i);
 }
 #endif //DEBUG
 

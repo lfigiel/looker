@@ -6,17 +6,17 @@ Copyright (c) 2018 Lukasz Figiel
 #define LOOKER_COMMON_H
 
 //master and slave together in one device
-#define LOOKER_COMBO
+//#define LOOKER_COMBO
 
 #define LOOKER_TYPE_FLOAT LOOKER_TYPE_FLOAT_1
 
 //this is common for master and slave, master stores only pointer to style
-#define LOOKER_VAR_STYLE_SIZE (LOOKER_MSG_PAYLOAD_SIZE - 2) //command, var_index
+#define LOOKER_VAR_STYLE_SIZE (LOOKER_MSG_PAYLOAD_SIZE - 2) /*command, var_index*/
 
 //todo: move to msg.h
-#define LOOKER_MSG_SIZE 64 //rx buffer needs to be at least that big
-#define LOOKER_MSG_PAYLOAD_SIZE (LOOKER_MSG_SIZE - 3) //msg_prefix, msg_size, msg_checksum
-#define LOOKER_MSG_PREFIX (LOOKER_MSG_PAYLOAD_SIZE + 1) //so these two values are different
+#define LOOKER_MSG_SIZE 64 /*minimum rx buffer*/
+#define LOOKER_MSG_PAYLOAD_SIZE (LOOKER_MSG_SIZE - 3) /*msg_prefix, msg_size, msg_checksum*/
+#define LOOKER_MSG_PREFIX (LOOKER_MSG_PAYLOAD_SIZE + 1) /*to differ from payload size*/
 
 #define LOOKER_STYLE_DISABLED 0
 #define LOOKER_STYLE_FIXED 1
@@ -86,4 +86,3 @@ typedef enum {
 } looker_slave_state_task_t;
 
 #endif //LOOKER_COMMON_H
-

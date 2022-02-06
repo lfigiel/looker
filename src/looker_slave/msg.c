@@ -251,7 +251,7 @@ looker_exit_t msg_get(msg_t *msg)
 {
     unsigned char rx;
     msg_pos_t msg_pos = POS_PREFIX;
-    unsigned int pay_pos;
+    unsigned int pay_pos = 0;
     unsigned int j;
 
     j = 0;
@@ -264,6 +264,9 @@ looker_exit_t msg_get(msg_t *msg)
                 looker_get(&rx, 1);
                 switch (msg_pos) {
                     case POS_PREFIX:
+#ifdef DEBUG_MSG_CHECKSUM
+                        PRINTLN2("msg: rx (prefix): ", rx);
+#endif //DEBUG_MSG_CHECKSUM
                         //check prefix
                         if (rx != LOOKER_MSG_PREFIX)
                         {
@@ -284,7 +287,7 @@ looker_exit_t msg_get(msg_t *msg)
                         {
                             msg->payload_size = rx;
 #ifdef DEBUG_MSG_CHECKSUM
-                            PRINTLN2("msg: rx (payload size): ", msg->payload_size);
+                            PRINTLN2("msg: rx (payload size): ", rx);
 #endif //DEBUG_MSG_CHECKSUM
                             msg->crc = crc_8(&rx, 1);
 #ifdef DEBUG_MSG_CHECKSUM
@@ -298,7 +301,7 @@ looker_exit_t msg_get(msg_t *msg)
                     case POS_PAYLOAD:
                         msg->payload[pay_pos] = rx;
 #ifdef DEBUG_MSG_CHECKSUM
-                        PRINTLN2("msg: rx: ", msg->payload[pay_pos]);
+                        PRINTLN2("msg: rx: ", rx);
 #endif //DEBUG_MSG_CHECKSUM
                         msg->crc = update_crc_8(msg->crc, rx);
 #ifdef DEBUG_MSG_CHECKSUM
@@ -309,6 +312,9 @@ looker_exit_t msg_get(msg_t *msg)
                     break;
 
                     case POS_CHECKSUM:
+#ifdef DEBUG_MSG_CHECKSUM
+                        PRINTLN2("msg: rx (crc): ", rx);
+#endif //DEBUG_MSG_CHECKSUM
                         //check checksum
                         if (msg->crc == rx)
                         {
@@ -322,7 +328,7 @@ looker_exit_t msg_get(msg_t *msg)
                         }
                         else
                         {
-                            PRINTLN2("Error: msg_get: checksum: ", rx);
+                            PRINT("Error: msg_get: checksum\n");
                             return LOOKER_EXIT_WRONG_CHECKSUM;
                         }
                     break;
@@ -359,7 +365,7 @@ void msg_send(msg_t *msg)
     tx = LOOKER_MSG_PREFIX;
     looker_send(&tx, 1);
 #ifdef DEBUG_MSG_CHECKSUM
-    PRINTLN2("msg: tx: ", tx);
+    PRINTLN2("msg: tx (prefix): ", tx);
 #endif //DEBUG_MSG_CHECKSUM
 
     //send payload size
@@ -389,7 +395,7 @@ void msg_send(msg_t *msg)
     //send checksum
     looker_send(&crc, sizeof(crc));
 #ifdef DEBUG_MSG_CHECKSUM
-    PRINTLN2("msg: tx: ", crc);
+    PRINTLN2("msg: tx (crc): ", crc);
 #endif //DEBUG_MSG_CHECKSUM
 
 #ifdef DEBUG_MSG_DECODE

@@ -10,7 +10,7 @@ volatile unsigned char led = 0;
 void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, 1);
-    serial_init();
+    looker_stubs_init(NULL);
 
     looker_wifi_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
     looker_reg("ADC", &adc, sizeof(adc), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, NULL);
@@ -22,4 +22,3 @@ void loop() {
     digitalWrite(LED_BUILTIN, led);
     looker_update();
 }
-

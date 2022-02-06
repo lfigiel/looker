@@ -37,7 +37,7 @@ enum {
     UPDATED_FROM_SLAVE
 };
 
-#define RESET_POSTPOND 500  //ms
+#define RESET_POSTPOND 500  /*ms*/
 
 typedef enum {
     MASTER_STATE_RESET = 0,
