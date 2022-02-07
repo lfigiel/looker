@@ -706,8 +706,8 @@ void html_print(void)
 
     webString +=
     "    <script>\n"
-    "    //var refresh_label = 'Turn refresh OFF'\n"
-    "    var refresh_label = 'Turn refresh ON'\n"
+    "    var refresh_label = 'Turn refresh OFF'\n"
+    "    //var refresh_label = 'Turn refresh ON'\n"
     "    var refresh_timeout;\n"
     "    document.getElementById('refresh_id').innerHTML = refresh_label;\n";
     if (debug)
