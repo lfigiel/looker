@@ -44,7 +44,7 @@ volatile unsigned char led = 0;
 void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, 1);
-    serial_init();
+    looker_stubs_init(NULL);
 
     looker_wifi_connect(LOOKER_SSID, LOOKER_PASS, LOOKER_DOMAIN);
     looker_reg("ADC", &adc, sizeof(adc), LOOKER_TYPE_UINT, LOOKER_LABEL_VIEW, NULL);
@@ -71,7 +71,7 @@ Connects to the WiFi network. Usually it takes a couple of seconds to complete.
 Blue LED on the WiFi module stops blinking when it gets connected.  
 details:  
 **looker_exit_t**  
-type of exit code. On success the function returns: LOOKER_EXIT_SUCCESS. Full definition is available in *looker.h*
+type of exit code. On success the function returns: LOOKER_EXIT_SUCCESS. Full definition is available in *looker_common.h*
 
 **ssid  
 pass**  
@@ -138,7 +138,7 @@ The following parameters specify the number of digits after the decimal place to
 *LOOKER_TYPE_FLOAT_2*  
 *LOOKER_TYPE_FLOAT_3*  
 *LOOKER_TYPE_FLOAT_4*  
-default number is defined in *looker.h*:
+default number is defined in *looker_common.h*:
 ```C
 #define LOOKER_TYPE_FLOAT LOOKER_TYPE_FLOAT_1
 ```
@@ -166,34 +166,7 @@ variable is read only
 variable can be edited
 
 **style**  
-CSS enhances viewing experience.
-
-Example:
-```C
-#define STYLE "color:red;"	//red text
-```
-Style can be disabled, fixed or variable:  
-*LOOKER_STYLE_DISABLED*  
-no CSS is used  
-
-*LOOKER_STYLE_FIXED*  
-style is fixed and cannot be changed  
-
-*LOOKER_STYLE_VARIABLE*  
-style can be changed on fly but this requires more RAM.  
-
-The following selects the style for master (*looker_master.h*) and slave (*looker_slave.h*)
-```C
-#define LOOKER_MASTER_STYLE LOOKER_STYLE_VARIABLE
-#define LOOKER_SLAVE_STYLE LOOKER_STYLE_VARIABLE
-```
-
-Max size of style (string) is limited in *looker_common.h*:
-```C
-#define LOOKER_VAR_STYLE_SIZE 48
-```
-
-For more info refer to Arduino app [style](src/examples/arduino/style/style.ino)
+Reserved. Put NULL now.
 
 ---
 ```C
