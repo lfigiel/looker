@@ -724,14 +724,11 @@ void html_print(void)
     "        var json_obj = this.response;\n"
     "        var timeout = 0;\n"
     "        for (var key in json_obj) {\n"
-    "            if (key === 'looker_sid')\n"
+    "            if (key === 'looker_sid') {\n"
     "                if (json_obj['looker_sid'] !== ";
-    webString += "'" + String(sid) + "')\n";
-    if (debug)
-        webString += "                    window.location.href.split('?')[0] + '?looker_debug=1';\n";
-    else
-        webString += "                    window.location.href.split('?')[0];\n";
-    webString +=
+    webString += "'" + String(sid) + "')\n"
+    "                    window.location.reload();\n"
+    "            }\n"
     "            if (key === 'looker_timeout') {\n"
     "                timeout = 1;\n"
     "                continue;\n"
