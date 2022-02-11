@@ -706,14 +706,14 @@ void html_print(void)
 
     webString +=
     "    <script>\n"
-    "    var refresh_label = 'Turn refresh OFF'\n"
-    "    //var refresh_label = 'Turn refresh ON'\n"
+    "    var refresh_label = 'Turn refresh OFF';\n"
+    "    //var refresh_label = 'Turn refresh ON';\n"
     "    var refresh_timeout;\n"
     "    document.getElementById('refresh_id').innerHTML = refresh_label;\n";
     if (debug)
-        webString += "    Get(window.location.href.split('?')[0] + '?looker_debug=1&looker_json=1');\n";
+        webString += "    get(window.location.href.split('?')[0] + '?looker_debug=1&looker_json=1');\n";
     else
-        webString += "    Get(window.location.href.split('?')[0] + '?looker_json=1');\n";
+        webString += "    get(window.location.href.split('?')[0] + '?looker_json=1');\n";
     webString +=
     "\n"
     "    function submit() {\n"
@@ -748,14 +748,14 @@ void html_print(void)
     "                obj.innerHTML = key + ': ' + json_obj[key];\n"
     "        }\n"
     "        if ((timeout === 1) && (refresh_label == 'Turn refresh OFF'))\n"
-    "            document.getElementById('looker_timeout').innerHTML = 'timeout: ' + json_obj['looker_timeout'];\n"
+    "            document.getElementById('looker_timeout').innerHTML = 'Master timeout: ' + json_obj['looker_timeout'];\n"
     "        else\n"
-    "            document.getElementById('looker_timeout').innerHTML = ' ';\n"
+    "            document.getElementById('looker_timeout').innerHTML = '';\n"
     "        if (refresh_label == 'Turn refresh OFF')\n";
     if (debug)
-        webString += "            refresh_timeout = window.setTimeout(Get,1000,window.location.href.split('?')[0] + '?looker_debug=1&looker_json=1');\n";
+        webString += "            refresh_timeout = window.setTimeout(get,1000,window.location.href.split('?')[0] + '?looker_debug=1&looker_json=1');\n";
     else
-        webString += "            refresh_timeout = window.setTimeout(Get,1000,window.location.href.split('?')[0] + '?looker_json=1');\n";
+        webString += "            refresh_timeout = window.setTimeout(get,1000,window.location.href.split('?')[0] + '?looker_json=1');\n";
     webString +=
     "        document.getElementById('looker_updated').style='color:black;';\n"
     "        updated_timeout = window.setTimeout(function(){document.getElementById('looker_updated').style='color:white;';}, 200, null);\n"
@@ -763,13 +763,16 @@ void html_print(void)
     "\n"
     "    function onError () {\n"
     "        clearTimeout(refresh_timeout);\n"
-    "        refresh_label = 'Turn refresh ON';\n"
-    "        document.getElementById('looker_timeout').innerHTML = ' ';\n"
-    "        document.getElementById('refresh_id').innerHTML = refresh_label;\n"
-    "        alert('Error: looker: server timeout');\n"
+    "        document.getElementById('looker_timeout').innerHTML = 'Server timeout, reconnecting ...';\n"
+    "        document.getElementById('refresh_id').innerHTML = refresh_label;\n";
+    if (debug)
+        webString += "        get(window.location.href.split('?')[0] + '?looker_debug=1&looker_json=1');\n";
+    else
+        webString += "        get(window.location.href.split('?')[0] + '?looker_json=1');\n";
+    webString +=
     "    }\n"
     "\n"
-    "    function Get(url) {\n"
+    "    function get(url) {\n"
     "        var xhr = new XMLHttpRequest();\n"
     "        xhr.addEventListener('load', onLoad);\n"
     "        xhr.addEventListener('error', onError);\n"
@@ -782,14 +785,14 @@ void html_print(void)
     "        if (refresh_label == 'Turn refresh OFF') {\n"
     "            clearTimeout(refresh_timeout);\n"
     "            refresh_label = 'Turn refresh ON';\n"
-    "            document.getElementById('looker_timeout').innerHTML = ' ';\n"
+    "            document.getElementById('looker_timeout').innerHTML = '';\n"
     "        }\n"
     "        else {\n"
     "            refresh_label = 'Turn refresh OFF';\n";
     if (debug)
-        webString += "            Get(window.location.href.split('?')[0] + '?looker_debug=1&looker_json=1');\n";
+        webString += "            get(window.location.href.split('?')[0] + '?looker_debug=1&looker_json=1');\n";
     else
-        webString += "            Get(window.location.href.split('?')[0] + '?looker_json=1');\n";
+        webString += "            get(window.location.href.split('?')[0] + '?looker_json=1');\n";
     webString +=
     "        }\n"
     "        document.getElementById('refresh_id').innerHTML = refresh_label;\n"
@@ -844,9 +847,10 @@ void handle_root()
 //todo: check also if value = 1
             json = 1;
         else if (!strcmp(server.argName(i).c_str(), "looker_debug")) {
-            debug = 1;
             if (!strcmp(server.arg(i).c_str(), "0"))
                 debug_reset();
+            else
+                debug = 1;
         }
         if (json && debug)
             break;
