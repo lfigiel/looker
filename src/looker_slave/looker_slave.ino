@@ -1008,8 +1008,7 @@ unsigned char var_replace(const char *var_name, const char *var_value)
 
             switch (var[i].size) {
                 case 4:
-                    if (((value_new < -FLT_MAX) || (value_new > FLT_MAX))
-                      || ((value_new > -FLT_MIN) && (value_new < FLT_MIN)))
+                    if ((value_new < -FLT_MAX) || (value_new > FLT_MAX))
                         return 0;
                     if (*(float *) var[i].value_current == (float ) value_new)
                         return 0;
